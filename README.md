@@ -6,7 +6,24 @@ Aprendes Linux, Bash y pentesting **investigando** en un laboratorio controlado:
 
 ## Estado
 
-Fase de diseño. Todavía no hay código; el documento de diseño está en [`docs/GDD.md`](docs/GDD.md).
+Paso 1 del plan completado: esqueleto del proyecto Godot y tests en consola. El diseño está en [`docs/GDD.md`](docs/GDD.md).
+
+## Ejecutar los tests
+
+```
+run_tests.cmd
+```
+
+Lanza Godot en modo consola (`--headless`), descubre `tests/test_*.gd`, ejecuta cada método `test_*` y devuelve código de salida 1 si algo falla. Si Godot no está en la ruta por defecto, define la variable de entorno `GODOT` con la ruta del `.exe` de consola.
+
+## Estructura
+
+| Carpeta | Contenido |
+| --- | --- |
+| `engine/` | Motor de laboratorio, sin interfaz (próximos pasos) |
+| `data/` | Laboratorios, misiones y fichas como datos |
+| `ui/`, `scenes/` | Interfaz de Godot |
+| `tests/` | Runner y tests automáticos |
 
 ## Ideas clave
 
