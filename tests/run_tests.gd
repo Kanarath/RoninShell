@@ -16,8 +16,11 @@ func _init() -> void:
 
 	for file_name in _find_test_files():
 		var script: GDScript = load("%s/%s" % [TESTS_DIR, file_name])
-		if script == null:
-			printerr("No se pudo cargar %s" % file_name)
+		# Un script con error de sintaxis se carga pero no se puede instanciar:
+		# lo contamos como fallo en vez de dejar el runner colgado.
+		if script == null or not script.can_instantiate():
+			print("  FALLO %s (no se pudo cargar: revisa errores de sintaxis)" % file_name)
+			total += 1
 			failed += 1
 			continue
 

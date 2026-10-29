@@ -1,0 +1,53 @@
+{
+	"id": "primer_contacto",
+	"title": "Primer contacto",
+	"cidr": "10.0.0.0/24",
+	"player_host": "10.0.0.2",
+	"hosts": [
+		{
+			"ip": "10.0.0.2",
+			"hostname": "ronin-box",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"}
+			],
+			"fs": {
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/nota.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "644",
+					"content": "Red autorizada del laboratorio: 10.0.0.0/24\nObjetivo: averiguar qué máquinas hay y qué ofrecen.\n"
+				},
+				"/home/ronin/.hidden": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "600",
+					"content": "Los archivos que empiezan por punto no salen con ls a secas.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.0.5",
+			"hostname": "web01",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "8.2p1", "banner": "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5"},
+				{"port": 80, "state": "open", "name": "http", "product": "Apache httpd", "version": "2.4.49", "banner": "Apache/2.4.49 (Unix)"},
+				{"port": 8080, "state": "filtered", "name": "http-proxy"}
+			]
+		},
+		{
+			"ip": "10.0.0.9",
+			"hostname": "files01",
+			"os": "Linux",
+			"responds_to_ping": false,
+			"services": [
+				{"port": 21, "state": "open", "name": "ftp", "product": "vsftpd", "version": "3.0.3", "banner": "220 (vsFTPd 3.0.3)"}
+			]
+		}
+	]
+}

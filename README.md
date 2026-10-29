@@ -6,7 +6,7 @@ Aprendes Linux, Bash y pentesting **investigando** en un laboratorio controlado:
 
 ## Estado
 
-Paso 1 del plan completado: esqueleto del proyecto Godot y tests en consola. El diseño está en [`docs/GDD.md`](docs/GDD.md).
+Pasos 1 y 2 del plan completados: esqueleto con tests en consola, y estado del mundo (hosts, servicios, archivos) cargado y validado desde `data/labs/*.json`. El diseño está en [`docs/GDD.md`](docs/GDD.md).
 
 ## Ejecutar los tests
 
