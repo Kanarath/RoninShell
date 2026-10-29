@@ -1,0 +1,14 @@
+# Godot 4
+.godot/
+.import/
+*.translation
+
+# Exportaciones
+export/
+build/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
