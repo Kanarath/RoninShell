@@ -10,7 +10,13 @@ extends SceneTree
 const TESTS_DIR := "res://tests"
 
 
-func _init() -> void:
+## Los tests se ejecutan en el primer fotograma (y no en _init): hasta entonces el
+## árbol de escenas no está activo y los nodos añadidos al root no reciben _ready.
+func _initialize() -> void:
+	process_frame.connect(_run_all, CONNECT_ONE_SHOT)
+
+
+func _run_all() -> void:
 	var total := 0
 	var failed := 0
 
@@ -34,6 +40,9 @@ func _init() -> void:
 			var test_case = script.new()
 			total += 1
 			test_case.call(test_name)
+
+			if test_case.assertions == 0:
+				test_case.fail("el test no hizo ninguna comprobación (¿abortó por un error?)")
 
 			if test_case.failures.is_empty():
 				print("  ok    %s::%s" % [file_name, test_name])

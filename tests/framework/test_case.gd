@@ -6,6 +6,9 @@ extends RefCounted
 ## proyecto recién clonado, sin necesidad de importar antes en el editor.
 
 var failures: Array[String] = []
+## Cuántas comprobaciones se han hecho. Un test con 0 se considera fallo:
+## suele significar que abortó antes de comprobar nada.
+var assertions: int = 0
 
 
 func fail(message: String) -> void:
@@ -13,16 +16,19 @@ func fail(message: String) -> void:
 
 
 func assert_true(condition: bool, message: String = "se esperaba true") -> void:
+	assertions += 1
 	if not condition:
 		fail(message)
 
 
 func assert_false(condition: bool, message: String = "se esperaba false") -> void:
+	assertions += 1
 	if condition:
 		fail(message)
 
 
 func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
+	assertions += 1
 	if actual != expected:
 		var prefix := message + ": " if message != "" else ""
 		fail("%sse esperaba %s pero fue %s" % [prefix, var_to_str(expected), var_to_str(actual)])

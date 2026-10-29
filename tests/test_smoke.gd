@@ -18,5 +18,5 @@ func test_escena_principal_carga() -> void:
 	if scene == null:
 		return
 	var root := scene.instantiate()
-	assert_true(root.has_node("Title"), "la escena debe tener un nodo Title")
+	assert_true(root is Control, "la raíz de la escena principal debe ser un Control")
 	root.free()

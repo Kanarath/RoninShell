@@ -8,6 +8,10 @@ Aprendes Linux, Bash y pentesting **investigando** en un laboratorio controlado:
 
 Pasos 1 y 2 del plan completados: esqueleto con tests en consola, y estado del mundo (hosts, servicios, archivos) cargado y validado desde `data/labs/*.json`. El diseño está en [`docs/GDD.md`](docs/GDD.md).
 
+## Probar el juego
+
+Abre la carpeta con Godot 4.7 y pulsa F5. `F2` enciende o apaga el VFX (líneas de escaneo y viñeta). La interfaz actual es una maqueta del diseño "ronin neón" (referencia en `docs/reference/`); aún no hay intérprete de comandos.
+
 ## Ejecutar los tests
 
 ```
