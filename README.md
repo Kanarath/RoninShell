@@ -6,7 +6,7 @@ Aprendes Linux, Bash y pentesting **investigando** en un laboratorio controlado:
 
 ## Estado
 
-Pasos 1 y 2 del plan completados: esqueleto con tests en consola, y estado del mundo (hosts, servicios, archivos) cargado y validado desde `data/labs/*.json`. El diseño está en [`docs/GDD.md`](docs/GDD.md).
+Completado: esqueleto con tests en consola, estado del mundo cargado desde `data/labs/*.json`, maqueta de la interfaz "ronin neón" e intérprete de comandos (comillas, escapes, tuberías, redirecciones, errores estilo bash). Siguiente: comandos de archivos (`ls`, `cd`, `cat`...) y conectar el intérprete a la terminal visual. El diseño está en [`docs/GDD.md`](docs/GDD.md).
 
 ## Probar el juego
 

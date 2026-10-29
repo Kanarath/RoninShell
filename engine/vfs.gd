@@ -37,6 +37,26 @@ func add_file(path: String, content: String, owner := "root", group := "root", m
 	return _add(path, _make_node("file", content, owner, group, mode))
 
 
+enum WriteResult { OK, NO_PARENT, NOT_DIR_PARENT, IS_DIR }
+
+
+## Escribe (o añade a) un archivo, creándolo si no existe. Es lo que usa ">" y ">>".
+## Todavía no comprueba permisos: llegarán con los comandos de archivos (paso 4).
+func write_file(path: String, content: String, append := false, owner := "root", group := "root") -> WriteResult:
+	if is_dir(path):
+		return WriteResult.IS_DIR
+	var parent := path.get_base_dir()
+	if not exists(parent):
+		return WriteResult.NO_PARENT
+	if not is_dir(parent):
+		return WriteResult.NOT_DIR_PARENT
+	if is_file(path):
+		_nodes[path]["content"] = (_nodes[path]["content"] + content) if append else content
+	else:
+		add_file(path, content, owner, group, "644")
+	return WriteResult.OK
+
+
 func exists(path: String) -> bool:
 	return _nodes.has(path)
 
