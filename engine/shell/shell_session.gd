@@ -8,11 +8,14 @@ extends RefCounted
 
 const Tokenizer := preload("res://engine/shell/tokenizer.gd")
 const Parser := preload("res://engine/shell/parser.gd")
+const ListParser := preload("res://engine/shell/list_parser.gd")
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
 const CommandDocs := preload("res://engine/commands/command_docs.gd")
 
 const HISTORY_LIMIT := 500
+const MAX_LOOP_ITERATIONS := 1000
+const MAX_SUBSTITUTION_DEPTH := 4
 
 var world: RefCounted
 var registry: RefCounted
@@ -29,6 +32,13 @@ var events: Array[Dictionary] = []
 var findings: Array[Dictionary] = []
 ## Seguimiento de misiones (opcional): tras cada comando revisa si se cumplió algún objetivo.
 var tracker: RefCounted = null
+
+
+## Variables del shell (HOME, USER... y las que cree el jugador) y cuáles están exportadas.
+var _vars: Dictionary = {}
+var _exported: Dictionary = {}
+var _pending_stderr := ""   # errores de $( ) que salen por pantalla junto al resto
+var _subst_depth := 0
 
 
 ## En modo libre lo que haces se registra marcado como "free": se ve en el mapa, pero no cuenta
@@ -52,6 +62,12 @@ func _init(lab_world: RefCounted, command_registry: RefCounted) -> void:
 	if not host.users.is_empty():
 		user = host.users[0]
 	cwd = user["home"] if host.fs.is_dir(user["home"]) else "/"
+	_vars = {
+		"HOME": user["home"], "USER": user["name"], "LOGNAME": user["name"], "SHELL": "/bin/bash",
+		"HOSTNAME": host.hostname, "PATH": "/usr/local/bin:/usr/bin:/bin", "PWD": cwd,
+	}
+	for exported_name: String in ["HOME", "USER", "LOGNAME", "SHELL", "PATH", "PWD"]:
+		_exported[exported_name] = true
 
 
 ## Texto del prompt, p. ej. "ronin@ronin-box:~$ ".
@@ -72,38 +88,182 @@ func run(line: String) -> RefCounted:
 		if history.size() > HISTORY_LIMIT:
 			history.pop_front()
 
-	var tokenized := Tokenizer.tokenize(line)
+	# Bash lee la línea entera antes de ejecutar nada: un error de sintaxis no ejecuta ni la primera parte.
+	var split := ListParser.split(line)
+	if split["error"] != "":
+		return _syntax_error(split["error"])
+	var built := ListParser.build(split["units"])
+	if built["error"] != "":
+		return _syntax_error(built["error"])
+	if built["items"].is_empty():
+		return CommandResult.ok()  # línea vacía o solo un comentario: no cambia el código de salida anterior
+
+	_vars["PWD"] = cwd
+	var out := {"stdout": "", "stderr": "", "notices": []}
+	_pending_stderr = ""
+	_exec_items(built["items"], out)
+	var final := CommandResult.new()
+	final.stdout = out["stdout"]
+	final.stderr = _pending_stderr + out["stderr"]
+	final.exit_code = last_exit_code
+	final.notices.append_array(out["notices"])
+	if tracker != null:
+		final.notices.append_array(tracker.after_command(self))
+	return final
+
+
+## Lo que usa el tokenizador para expandir $VAR, $? y ~.
+func expand_var(name: String) -> String:
+	match name:
+		"?":
+			return str(last_exit_code)
+		"PWD":
+			return cwd
+	return str(_vars.get(name, ""))
+
+
+## $( ... ): ejecuta el comando dentro del laboratorio y devuelve su salida sin el salto final.
+func command_substitution(text: String) -> String:
+	if _subst_depth >= MAX_SUBSTITUTION_DEPTH:
+		_pending_stderr += "bash: demasiadas sustituciones $( ) anidadas\n"
+		return ""
+	var split := ListParser.split(text)
+	var built := ListParser.build(split["units"]) if split["error"] == "" else split
+	var message: String = split["error"] if split["error"] != "" else built["error"]
+	if message != "":
+		_pending_stderr += "bash: %s\n" % message
+		return ""
+	_subst_depth += 1
+	var inner := {"stdout": "", "stderr": "", "notices": []}
+	_exec_items(built["items"], inner)
+	_subst_depth -= 1
+	_pending_stderr += inner["stderr"]   # los errores del interior se ven, como en bash
+	return inner["stdout"].rstrip("\n")
+
+
+func set_var(name: String, value: String) -> void:
+	_vars[name] = value
+	record("var_set", {"name": name})
+
+
+func unset_var(name: String) -> void:
+	_vars.erase(name)
+	_exported.erase(name)
+
+
+func export_var(name: String) -> void:
+	_exported[name] = true
+
+
+## Variables exportadas (las que muestra `env`), ordenadas por nombre.
+func exported_vars() -> Dictionary:
+	var result := {}
+	var names: Array = _exported.keys()
+	names.sort()
+	for name: String in names:
+		result[name] = expand_var(name)
+	return result
+
+
+## Ejecuta una lista de elementos respetando ; && || (el estado de salida decide qué corre).
+func _exec_items(items: Array, out: Dictionary) -> void:
+	for item: Dictionary in items:
+		var op: String = item["op"]
+		if op == "&&" and last_exit_code != 0:
+			record("list_op", {"op": op, "ran": false})
+			continue
+		if op == "||" and last_exit_code == 0:
+			record("list_op", {"op": op, "ran": false})
+			continue
+		if op != "" and op != ";":
+			record("list_op", {"op": op, "ran": true})
+		if item["kind"] == "for":
+			_run_for(item, out)
+		else:
+			_run_pipeline(item["text"], out)
+
+
+func _run_for(item: Dictionary, out: Dictionary) -> void:
+	var tokenized := Tokenizer.tokenize(item["header"], self)
 	if tokenized["error"] != "":
-		return _syntax_error(tokenized["error"])
+		_fail_into(out, tokenized["error"])
+		return
+	var words: Array = []
+	for token: Dictionary in tokenized["tokens"]:
+		if token["type"] != "word":
+			_fail_into(out, "syntax error near unexpected token `%s'" % ("|" if token["type"] == "pipe" else ">"))
+			return
+		words.append(token["text"])
+	var variable: String = words[1]
+	var values: Array = words.slice(3)
+	if values.size() > MAX_LOOP_ITERATIONS:
+		_fail_into(out, "for: demasiados elementos (máximo %d)" % MAX_LOOP_ITERATIONS)
+		return
+	last_exit_code = 0
+	for value: String in values:
+		_vars[variable] = value
+		_exec_items(item["body"], out)
+	record("loop_ran", {"variable": variable, "count": values.size()})
+
+
+func _fail_into(out: Dictionary, message: String) -> void:
+	out["stderr"] += "bash: %s\n" % message
+	last_exit_code = 2
+
+
+## Una tubería: tokeniza (ahora, con las variables al día), parsea y ejecuta sus comandos.
+func _run_pipeline(text: String, out: Dictionary) -> void:
+	var tokenized := Tokenizer.tokenize(text, self)
+	if tokenized["error"] != "":
+		_fail_into(out, tokenized["error"])
+		return
 	var parsed := Parser.parse(tokenized["tokens"])
 	if parsed["error"] != "":
-		return _syntax_error(parsed["error"])
+		_fail_into(out, parsed["error"])
+		return
 	if parsed["commands"].is_empty():
-		return CommandResult.ok()  # línea vacía: no cambia el código de salida anterior
+		return
+	if _is_assignment_line(text):
+		_run_assignments(parsed["commands"][0], out)
+		return
 
-	var final := CommandResult.new()
 	var stdin := ""
-	var errors := ""
+	var names: Array[String] = []
 	for command: Dictionary in parsed["commands"]:
+		names.append(command["argv"][0])
 		var result := _run_command(command["argv"], stdin)
-		errors += result.stderr
+		out["stderr"] += result.stderr
 		var output: String = result.stdout
 		if command["redirect"] != null:
 			var redirect_error := _apply_redirect(command["redirect"], output)
 			if redirect_error != "":
-				errors += redirect_error
+				out["stderr"] += redirect_error
 				result.exit_code = 1
 			output = ""  # lo redirigido no sigue por la tubería ni se muestra
 		stdin = output
-		final.exit_code = result.exit_code
-		final.notices.append_array(result.notices)
+		last_exit_code = result.exit_code
+		out["notices"].append_array(result.notices)
+	out["stdout"] += stdin
+	if names.size() > 1:
+		record("pipeline", {"cmds": "|".join(names)})
 
-	final.stdout = stdin
-	final.stderr = errors
-	last_exit_code = final.exit_code
-	if tracker != null:
-		final.notices.append_array(tracker.after_command(self))
-	return final
+
+func _is_assignment_line(text: String) -> bool:
+	var eq := text.find("=")
+	return eq > 0 and Tokenizer.is_valid_name(text.substr(0, eq))
+
+
+## NOMBRE=valor [NOMBRE2=valor2 ...] sin comando: solo asigna. (VAR=x comando no está soportado.)
+func _run_assignments(command: Dictionary, out: Dictionary) -> void:
+	for word: String in command["argv"]:
+		var eq := word.find("=")
+		if eq <= 0 or not Tokenizer.is_valid_name(word.substr(0, eq)):
+			_fail_into(out, "%s: no se puede usar VAR=valor delante de un comando; asigna en una línea y ejecuta el comando después (o usa `;`)" % word)
+			return
+	for word: String in command["argv"]:
+		var eq := word.find("=")
+		set_var(word.substr(0, eq), word.substr(eq + 1))
+	last_exit_code = 0
 
 
 func _run_command(argv: Array, stdin: String) -> RefCounted:

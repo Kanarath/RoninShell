@@ -5,6 +5,7 @@ extends RefCounted
 const CommandRegistry := preload("res://engine/shell/command_registry.gd")
 const BasicCommands := preload("res://engine/commands/basic_commands.gd")
 const FileCommands := preload("res://engine/commands/file_commands.gd")
+const ShellCommands := preload("res://engine/commands/shell_commands.gd")
 const NetworkCommands := preload("res://engine/commands/network_commands.gd")
 const HelpCommands := preload("res://engine/commands/help_commands.gd")
 const MissionCommands := preload("res://engine/commands/mission_commands.gd")
@@ -17,6 +18,7 @@ static func create_registry(mission_tracker: RefCounted = null, lab_controller: 
 	var registry := CommandRegistry.new()
 	BasicCommands.new().register_all(registry)
 	FileCommands.new().register_all(registry)
+	ShellCommands.new().register_all(registry)
 	NetworkCommands.new().register_all(registry)
 	HelpCommands.new().register_all(registry)
 	if mission_tracker != null:
