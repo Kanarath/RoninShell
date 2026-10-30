@@ -36,6 +36,8 @@ func format_notifications(notifications: Array, level_before: int) -> Array[Stri
 				lines.append("Escribe `mision` para ver tus objetivos.")
 	if engine.level() > level_before:
 		lines.append("Nivel %d alcanzado." % engine.level())
+	if not notifications.is_empty() and not engine.active_question().is_empty():
+		lines.append("Tienes una pregunta pendiente: escribe `responder` para verla (se contesta con `responder <número>`).")
 	return lines
 
 

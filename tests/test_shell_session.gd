@@ -99,6 +99,25 @@ func test_historial_guarda_las_lineas_en_orden() -> void:
 	assert_eq(s.history, ["echo uno", "pwd", "comando_raro"])
 
 
+# --- Privilegios: sudo y su existen, pero ronin no puede usarlos ---
+
+func test_sudo_y_su_se_deniegan_como_en_un_usuario_normal() -> void:
+	var s := _session()
+	var sudo_result = s.run("sudo cat /etc/shadow")
+	assert_eq(sudo_result.stderr, "ronin is not in the sudoers file.  This incident will be reported.\n")
+	assert_eq(sudo_result.exit_code, 1)
+	assert_eq(sudo_result.stdout, "", "no se ejecuta nada")
+	var su_result = s.run("su")
+	assert_eq(su_result.stderr, "su: Authentication failure\n")
+	assert_eq(su_result.exit_code, 1)
+	assert_eq(s.run("sudo").stderr, "usage: sudo -h | -K | -k | -V\n")
+	var kinds: Array = []
+	for event: Dictionary in s.events:
+		if event["type"] == "privilege_attempt":
+			kinds.append(event["tool"])
+	assert_eq(kinds, ["sudo", "su"], "los intentos quedan registrados para evaluar el método")
+
+
 # --- Tuberías ---
 
 func test_tuberia_pasa_stdout_como_stdin() -> void:

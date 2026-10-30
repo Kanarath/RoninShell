@@ -67,7 +67,7 @@
 						"prompt": "`cat /etc/shadow` devuelve `Permission denied`. ¿Qué es lo más correcto concluir?",
 						"options": [
 							{"text": "El archivo no existe.", "why": "Si no existiera diría `No such file or directory`. `Permission denied` significa que existe, pero no tienes permiso."},
-							{"text": "Tu usuario no tiene permiso de lectura sobre ese archivo.", "why": "Exacto. Puedes comprobarlo con `ls -l /etc/shadow`: pertenece a root, su grupo es shadow y 'otros' no tienen acceso."},
+							{"text": "Tu usuario no tiene permiso de lectura sobre ese archivo.", "why": "Exacto. Puedes comprobarlo con `ls -l /etc/shadow`: pertenece a root, su grupo es shadow y 'otros' no tienen acceso. Ni siquiera `sudo` te lo daría: ronin no está en sudoers. Escalar privilegios es un tema de misiones futuras."},
 							{"text": "El comando cat está roto.", "why": "cat funciona con otros archivos: el mensaje habla del archivo, no del comando."},
 							{"text": "Hay que reiniciar el sistema.", "why": "Un permiso no se arregla reiniciando: depende del dueño, el grupo y los bits de permisos del archivo."}
 						],

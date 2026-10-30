@@ -50,6 +50,8 @@ func _pista(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	var objective: Dictionary = engine.objectives()[number - 1]
 	var title := "SOLUCIÓN EXPLICADA" if hint["is_solution"] else "PISTA %d/%d" % [hint["level"], hint["total"] - 1]
 	var text := "%s  -  objetivo %d: %s\n  %s\n" % [title, number, objective["text"], hint["text"]]
+	if objective.has("question"):
+		text += "  => Esto es una pregunta, no un comando: escribe `responder` para ver las opciones y `responder <número>` para contestar.\n"
 	if not hint["is_solution"]:
 		text += "(Otra llamada a `pista` te dará una ayuda más concreta. Pedir ayuda no te penaliza: solo me dice qué conviene repasar.)\n"
 	else:

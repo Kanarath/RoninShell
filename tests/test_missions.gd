@@ -347,6 +347,17 @@ func test_los_comandos_de_juego_mision_pista_responder() -> void:
 	assert_eq(game["engine"].xp, 30)
 
 
+func test_el_juego_avisa_de_que_hay_una_pregunta_y_como_contestarla() -> void:
+	var game := _game()
+	var session: RefCounted = game["session"]
+	var notices: Array = session.run("cat /etc/shadow").notices
+	assert_true("Tienes una pregunta pendiente: escribe `responder`" in "\n".join(notices), "aviso al desbloquearse la pregunta")
+	var hint: String = session.run("pista 5").stdout
+	assert_true("Esto es una pregunta, no un comando" in hint, "la pista dice cómo contestar")
+	assert_true("responder <número>" in hint)
+	assert_true("EN CURSO" in session.run("mision").stdout or "[?]" in session.run("mision").stdout)
+
+
 func test_responder_muestra_la_pregunta_y_comenta_cada_error() -> void:
 	var game := _game()
 	var session: RefCounted = game["session"]

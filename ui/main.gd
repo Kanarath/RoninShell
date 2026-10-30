@@ -138,7 +138,7 @@ func _rebuild_objectives() -> void:
 			tag = "BLOQUEADO"
 		elif not active.is_empty() and active["id"] == objective["id"]:
 			state = SealIcon.State.ACTIVE
-			tag = "EN CURSO"
+			tag = "PREGUNTA: escribe  responder" if objective.has("question") else "EN CURSO"
 			tag_color = Palette.TEAL
 		elif objective.has("question"):
 			tag = "PREGUNTA"
