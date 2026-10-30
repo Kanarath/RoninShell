@@ -2,6 +2,7 @@ extends RefCounted
 ## Órdenes de la capa de juego sobre el laboratorio: modo, reiniciar y repaso.
 
 const CommandResult := preload("res://engine/shell/command_result.gd")
+const Vfs := preload("res://engine/vfs.gd")
 
 var controller: RefCounted
 
@@ -14,6 +15,7 @@ func register_all(registry: RefCounted) -> void:
 	registry.register("modo", "[juego] Cambia de modo: libre, mision (modo sin argumentos lo muestra)", _modo)
 	registry.register("reiniciar", "[juego] Restaura el laboratorio a su estado inicial", _reiniciar)
 	registry.register("laboratorio", "[juego] Lista los laboratorios y cambia de uno a otro", _laboratorio)
+	registry.register("nano", "Abre un editor de texto sencillo (Ctrl+S guarda, Esc cierra)", _nano)
 	registry.register("repaso", "[juego] Repaso espaciado: qué toca repasar y retos nuevos", _repaso)
 
 
@@ -36,6 +38,32 @@ func _modo(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	if wanted == "libre":
 		return CommandResult.ok("MODO LIBRE: sin objetivos ni XP. Experimenta sin miedo; `reiniciar` restaura el laboratorio y `modo mision` te devuelve a tu misión.\n")
 	return CommandResult.ok("De vuelta a la misión. `mision` te recuerda dónde estabas.\n")
+
+
+## nano abre una ventana de edición (la interfaz la atiende, como el resto de peticiones).
+## Los permisos se comprueban aquí al abrir y otra vez al guardar.
+func _nano(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	if args.is_empty():
+		return CommandResult.error("nano: falta el nombre del archivo. Uso: nano <archivo>")
+	if args.size() > 1:
+		return CommandResult.error("nano: solo se puede editar un archivo a la vez")
+	var shown: String = args[0]
+	var path := Vfs.normalize(session.cwd, shown)
+	var fs = session.host.fs
+	if fs.is_dir(path):
+		return CommandResult.error("nano: %s: Is a directory" % shown)
+	if fs.exists(path):
+		if not fs.check_access(path, session.user, "r"):
+			return CommandResult.error("nano: %s: Permission denied" % shown)
+	else:
+		var parent: String = path.get_base_dir()
+		if not fs.is_dir(parent):
+			return CommandResult.error("nano: %s: No such file or directory" % shown)
+		if not fs.check_access(parent, session.user, "w"):
+			return CommandResult.error("nano: %s: Permission denied" % shown)
+	session.record("editor_opened", {"path": path})
+	controller.request("edit", {"path": path, "shown": shown})
+	return CommandResult.ok("Abriendo el editor... (Ctrl+S guarda, Esc cierra)\n")
 
 
 func _laboratorio(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:

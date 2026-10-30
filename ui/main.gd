@@ -24,6 +24,7 @@ const CheatsheetPanel := preload("res://ui/widgets/cheatsheet_panel.gd")
 const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
 const DebugPanel := preload("res://ui/widgets/debug_panel.gd")
 const ProfilePanel := preload("res://ui/widgets/profile_panel.gd")
+const EditorPanel := preload("res://ui/widgets/editor_panel.gd")
 const Profile := preload("res://engine/profile.gd")
 const StartMenu := preload("res://ui/widgets/start_menu.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
@@ -74,6 +75,7 @@ var cheatsheet_panel := CheatsheetPanel.new()
 var settings_panel := SettingsPanel.new()
 var debug_panel := DebugPanel.new()
 var profile_panel := ProfilePanel.new()
+var editor_panel := EditorPanel.new()
 var _unlocked: Array[String] = []
 var _stats := {"review_passes": 0}
 var start_menu := StartMenu.new()
@@ -149,6 +151,10 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if _any_window_open():
+			if editor_panel.is_open():
+				editor_panel.request_close()   # con cambios sin guardar avisa primero
+				get_viewport().set_input_as_handled()
+				return
 			for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
 				panel.close()
 			if start_menu.is_open() and start_menu.continue_button.disabled == false:
@@ -158,7 +164,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _any_window_open() -> bool:
-	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or profile_panel.is_open() or start_menu.is_open()
+	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or profile_panel.is_open() or editor_panel.is_open() or start_menu.is_open()
 
 
 ## F1 chuleta, F9 menú, F10 ajustes, F11 pruebas, F2 efectos.
@@ -203,10 +209,11 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, editor_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
+	editor_panel.saved.connect(_on_file_saved)
 	settings_panel.changed.connect(_on_settings_changed)
 	debug_panel.action.connect(_on_debug_action)
 
@@ -667,6 +674,17 @@ func _on_command_executed(line: String, result: RefCounted) -> void:
 	_save_progress()
 
 
+## Guardar desde el editor cuenta como actividad del laboratorio: los objetivos se reevalúan.
+func _on_file_saved() -> void:
+	terminal.print_text("[editor] Guardado: %s" % editor_panel.shown, Palette.TEAL_DIM)
+	if controller.mode == "repaso":
+		_check_review_finished()
+	_announce_unlocks()
+	_check_achievements()
+	_refresh_missions()
+	_save_progress()
+
+
 ## Atiende lo que han pedido los comandos (modo, reiniciar, repaso): ellos no pueden reconstruir el laboratorio.
 func _process_requests() -> void:
 	for request: Dictionary in controller.take_requests():
@@ -681,6 +699,8 @@ func _process_requests() -> void:
 				_start_review(request["concept"])
 			"review_exit":
 				_exit_review("Has salido del repaso. Volverá a tocar más adelante.")
+			"edit":
+				editor_panel.open_file(session, request["path"], request["shown"])
 
 
 func _reset_lab() -> void:
