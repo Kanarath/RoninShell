@@ -19,6 +19,9 @@ const XP_PER_LEVEL := 300
 const OPTIONAL_FACTOR := 0.5 # la autoevaluación opcional da la mitad: es un extra, no un peaje
 
 var book: Dictionary
+## Se llama al completar un objetivo con (objetivo, dominio). La usa el repaso espaciado
+## para programar el concepto sin que el motor de misiones sepa nada de él.
+var on_objective_done: Callable = Callable()
 var xp: int = 0
 var mission_index: int = 0
 var _state: Dictionary = {}     # id de objetivo -> {status, hints_used, attempts, mastery, xp}
@@ -37,6 +40,19 @@ func _init(mission_book: Dictionary) -> void:
 
 
 # --- Consulta -----------------------------------------------------------------
+
+## XP extra concedido desde fuera (p. ej. por superar un repaso).
+func award_xp(amount: int) -> void:
+	xp += maxi(0, amount)
+
+
+## Un libro con una sola misión del libro dado, para jugarla aparte (retos de repaso).
+static func single_mission_book(source: Dictionary, mission_id: String) -> Dictionary:
+	for mission: Dictionary in source["missions"]:
+		if mission["id"] == mission_id:
+			return {"id": source["id"], "title": source["title"], "lab": source["lab"], "missions": [mission.duplicate(true)]}
+	return {}
+
 
 func is_finished() -> bool:
 	return mission_index >= book["missions"].size()
@@ -249,6 +265,8 @@ func _complete(objective: Dictionary) -> Array:
 	state["mastery"] = mastery
 	state["xp"] = earned
 	xp += earned
+	if on_objective_done.is_valid():
+		on_objective_done.call(objective, mastery)
 	if objective.has("evidence") and not _evidence.has(objective["evidence"]["id"]):
 		_evidence.append(objective["evidence"]["id"])
 

@@ -14,6 +14,8 @@ const CommandSet := preload("res://engine/commands/command_set.gd")
 const MissionLoader := preload("res://engine/missions/mission_loader.gd")
 const MissionEngine := preload("res://engine/missions/mission_engine.gd")
 const MissionTracker := preload("res://engine/missions/mission_tracker.gd")
+const LabController := preload("res://engine/lab_controller.gd")
+const ReviewScheduler := preload("res://engine/review/review_scheduler.gd")
 const SaveStore := preload("res://game/save_store.gd")
 const Settings := preload("res://game/settings.gd")
 const SettingsStore := preload("res://game/settings_store.gd")
@@ -24,12 +26,26 @@ const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
 const MISSIONS_PATH := "res://data/missions/primer_contacto.json"
+const REVIEWS_PATH := "res://data/missions/repaso.json"
 const DOSSIER_SLOTS := 4
+const REVIEW_XP := 50
 
+## Lo "activo" (el laboratorio, la sesión y el motor que se ven ahora). Durante un repaso apuntan
+## al reto; el progreso real vive siempre en main_*.
 var world: RefCounted = null
 var session: RefCounted = null
 var mission_engine: RefCounted = null
 var tracker: RefCounted = null
+var main_world: RefCounted = null
+var main_session: RefCounted = null
+var main_engine: RefCounted = null
+var main_tracker: RefCounted = null
+var controller := LabController.new()
+var scheduler := ReviewScheduler.new()
+var review_book: Dictionary = {}
+var _review_engine: RefCounted = null
+var _review_session: RefCounted = null
+var _active_lab_path := LAB_PATH
 var terminal := TerminalView.new()
 ## Si es false no se lee ni se escribe progreso (tests y capturas con --no-save).
 var persist := true
@@ -160,27 +176,56 @@ func _apply_settings() -> void:
 	settings_panel.apply(settings)
 
 
-# --- Sesión y misiones --------------------------------------------------------
+
+# --- Sesión, modos y repaso ----------------------------------------------------
+
+func _lab_path(lab_id: String) -> String:
+	return "res://data/labs/%s.json" % lab_id
+
+
+func _make_session(lab_world: RefCounted, lab_tracker: RefCounted) -> RefCounted:
+	var new_session := ShellSession.new(lab_world, CommandSet.create_registry(lab_tracker, controller))
+	new_session.tracker = lab_tracker
+	new_session.free_mode = controller.mode == "libre"
+	return new_session
+
 
 func _start_session() -> void:
 	if world == null:
 		terminal.print_text("No se pudo cargar el laboratorio.", Palette.DANGER)
 		return
+	main_world = world
+	_active_lab_path = LAB_PATH
 
 	var banner: Array = ["RoninShell  -  laboratorio \"%s\"" % world.title]
 	var loaded := MissionLoader.load_file(MISSIONS_PATH)
 	if loaded["book"] != null:
-		mission_engine = MissionEngine.new(loaded["book"])
-		tracker = MissionTracker.new(mission_engine)
-		if persist and _store.load_into(mission_engine):
-			banner.append("Progreso restaurado. Escribe `mision` para ver dónde estabas.")
-		else:
-			banner.append("Escribe `mision` para ver tu primer objetivo y `help` para ver los comandos. Tab completa.")
+		main_engine = MissionEngine.new(loaded["book"])
+		main_tracker = MissionTracker.new(main_engine)
+		main_engine.on_objective_done = func(objective: Dictionary, mastery: String) -> void:
+			scheduler.schedule(objective["concept"], mastery, controller.now())
+		mission_engine = main_engine
+		tracker = main_tracker
 	else:
 		push_error("No se pudieron cargar las misiones: %s" % str(loaded["errors"]))
 
-	session = ShellSession.new(world, CommandSet.create_registry(tracker))
-	session.tracker = tracker
+	var reviews := MissionLoader.load_file(REVIEWS_PATH)
+	if reviews["book"] != null:
+		review_book = reviews["book"]
+	else:
+		push_error("No se pudieron cargar los retos de repaso: %s" % str(reviews["errors"]))
+	controller.scheduler = scheduler
+	controller.review_book = review_book
+
+	var restored := persist and main_engine != null and _load_progress()
+	if main_engine != null:
+		banner.append("Progreso restaurado. Escribe `mision` para ver dónde estabas." if restored else "Escribe `mision` para ver tu primer objetivo y `help` para ver los comandos. Tab completa.")
+	var due := controller.due_reviews()
+	if not due.is_empty():
+		banner.append("Tienes %d concepto(s) para repasar. Escribe `repaso` cuando quieras: es opcional y nunca resta." % due.size())
+
+	session = _make_session(world, tracker)
+	main_session = session
 	banner.append("")
 	terminal.setup(session, banner)
 	terminal.command_executed.connect(_on_command_executed)
@@ -188,12 +233,121 @@ func _start_session() -> void:
 	network_map.refresh()
 
 
+func _load_progress() -> bool:
+	var data := _store.load_data()
+	if data.is_empty():
+		return false
+	if data.has("progress"):
+		main_engine.load_dict(data["progress"])
+		scheduler.load_dict(data.get("reviews", {}))
+	else:
+		main_engine.load_dict(data)  # formato antiguo: solo el progreso de misiones
+	return true
+
+
+func _save_progress() -> void:
+	if persist and main_engine != null:
+		_store.save_data({"progress": main_engine.to_dict(), "reviews": scheduler.to_dict()})
+
+
 func _on_command_executed(line: String, result: RefCounted) -> void:
 	_react(line, result)
+	_process_requests()
+	if controller.mode == "repaso":
+		_check_review_finished()
 	network_map.refresh()
 	_refresh_missions()
-	if persist and mission_engine != null:
-		_store.save(mission_engine)
+	_save_progress()
+
+
+## Atiende lo que han pedido los comandos (modo, reiniciar, repaso): ellos no pueden reconstruir el laboratorio.
+func _process_requests() -> void:
+	for request: Dictionary in controller.take_requests():
+		match request["type"]:
+			"reset":
+				_reset_lab()
+			"mode":
+				session.free_mode = request["mode"] == "libre"
+			"review":
+				_start_review(request["concept"])
+			"review_exit":
+				_exit_review("Has salido del repaso. Volverá a tocar más adelante.")
+
+
+func _reset_lab() -> void:
+	var loaded := LabLoader.load_file(_active_lab_path)
+	if loaded["world"] == null:
+		terminal.print_text("No se pudo reiniciar el laboratorio: %s" % str(loaded["errors"]), Palette.DANGER)
+		return
+	_switch_to(loaded["world"], tracker, ["Laboratorio reiniciado: archivos, permisos y descubrimientos como al principio. Tu progreso sigue intacto."])
+	if controller.mode == "repaso":
+		_review_session = session
+	else:
+		main_session = session
+
+
+## Cambia a otro mundo y sesión, manteniendo lo escrito en pantalla.
+func _switch_to(new_world: RefCounted, new_tracker: RefCounted, lines: Array) -> void:
+	world = new_world
+	tracker = new_tracker
+	session = _make_session(world, tracker)
+	network_map.world = world
+	network_map.session = session
+	terminal.replace_session(session, lines)
+
+
+func _start_review(concept: String) -> void:
+	var mission: Dictionary = controller.review_mission_for(concept)
+	var single := MissionEngine.single_mission_book(review_book, mission.get("id", ""))
+	var loaded := LabLoader.load_file(_lab_path(review_book.get("lab", "")))
+	if single.is_empty() or loaded["world"] == null:
+		controller.mode = "mision"
+		terminal.print_text("No se pudo preparar el reto de repaso.", Palette.DANGER)
+		return
+	_review_engine = MissionEngine.new(single)
+	mission_engine = _review_engine
+	_active_lab_path = _lab_path(review_book["lab"])
+	var review_tracker := MissionTracker.new(_review_engine)
+	review_tracker.quiet_mission_end = true
+	_switch_to(loaded["world"], review_tracker, [
+		"",
+		"=== REPASO: %s ===" % concept.replace("_", " ").to_upper(),
+		mission["briefing"],
+		"Otra red y otros equipos: repetir lo que hiciste antes no sirve, hay que razonarlo de nuevo. `mision` te recuerda el objetivo y `repaso salir` abandona.",
+		"",
+	])
+	_review_session = session
+
+
+func _check_review_finished() -> void:
+	if _review_engine == null or not _review_engine.is_finished():
+		return
+	var concept := controller.current_review_concept
+	var used_solution := false
+	for objective: Dictionary in _review_engine.book["missions"][0]["objectives"]:
+		used_solution = used_solution or _review_engine.mastery_of(objective["id"]) == "solucion"
+	scheduler.record_result(concept, not used_solution, controller.now())
+	if used_solution:
+		_exit_review("Repaso completado viendo la solución: no pasa nada, vuelve pronto para practicarlo de nuevo.")
+	else:
+		main_engine.award_xp(REVIEW_XP)
+		_exit_review("Repaso superado: +%d XP. Este concepto tardará más en volver a tocar." % REVIEW_XP)
+		mascot.react("happy", 4.0)
+
+
+func _exit_review(message: String) -> void:
+	controller.mode = "mision"
+	controller.current_review_concept = ""
+	_review_engine = null
+	mission_engine = main_engine
+	tracker = main_tracker
+	world = main_world
+	session = main_session
+	session.free_mode = false
+	_active_lab_path = LAB_PATH
+	network_map.world = world
+	network_map.session = session
+	terminal.replace_session(session, ["", message, ""])
 
 
 ## La mascota reacciona: celebra los objetivos, se alarma con un error y piensa si pides ayuda.
@@ -204,7 +358,7 @@ func _react(line: String, result: RefCounted) -> void:
 		completed = completed or notice.begins_with("[+]") or notice.begins_with("***")
 	if completed:
 		mascot.react("happy", 3.5)
-	elif first_word in ["pista", "man", "help", "cheatsheet"] or " --help" in line:
+	elif first_word in ["pista", "man", "help", "cheatsheet", "repaso"] or " --help" in line:
 		mascot.react("think", 3.0)
 	elif result.exit_code != 0 or result.stderr != "":
 		mascot.react("alert", 2.5)
@@ -214,12 +368,19 @@ func _react(line: String, result: RefCounted) -> void:
 func _refresh_missions() -> void:
 	if mission_engine == null:
 		return
-	if mission_engine.is_finished():
-		_mission_label.text = "LABORATORIO COMPLETADO"
-	else:
-		_mission_label.text = "MISIÓN %d  ·  %s" % [mission_engine.mission_index + 1, mission_engine.current_mission()["title"].to_upper()]
-	_level_label.text = "NV %d" % mission_engine.level()
-	_xp_bar.value = mission_engine.level_progress() * 100.0
+	match controller.mode:
+		"libre":
+			_mission_label.text = "MODO LIBRE"
+		"repaso":
+			_mission_label.text = "REPASO  ·  %s" % controller.current_review_concept.replace("_", " ").to_upper()
+		_:
+			if mission_engine.is_finished():
+				_mission_label.text = "LABORATORIO COMPLETADO"
+			else:
+				_mission_label.text = "MISIÓN %d  ·  %s" % [mission_engine.mission_index + 1, mission_engine.current_mission()["title"].to_upper()]
+	# El nivel y el XP son siempre los de tu progreso real, también durante un repaso.
+	_level_label.text = "NV %d" % main_engine.level()
+	_xp_bar.value = main_engine.level_progress() * 100.0
 	_rebuild_objectives()
 	_rebuild_dossier()
 
@@ -229,6 +390,11 @@ func _rebuild_objectives() -> void:
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
+	if controller.mode == "libre":
+		var note := _colored_label("Laboratorio libre: experimenta sin objetivos ni XP. Si lo estropeas, escribe  reiniciar.  Para volver:  modo mision", Palette.TEXT_DIM, 13)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(note)
+		return
 	if mission_engine.is_finished():
 		content.add_child(_colored_label("Has completado todas las misiones.", Palette.GOLD, 14))
 		return
@@ -275,7 +441,7 @@ func _rebuild_dossier() -> void:
 		_dossier_grid.remove_child(child)
 		child.queue_free()
 	var collected: Array = []
-	for card: Dictionary in mission_engine.evidence_cards():
+	for card: Dictionary in main_engine.evidence_cards():
 		if card["collected"]:
 			collected.append(card)
 	var shown: Array = collected.slice(maxi(0, collected.size() - DOSSIER_SLOTS))

@@ -1,0 +1,101 @@
+{
+	"id": "repaso_red",
+	"title": "Repaso: red de auditoría",
+	"cidr": "10.0.1.0/24",
+	"player_host": "10.0.1.2",
+	"hosts": [
+		{
+			"ip": "10.0.1.2",
+			"hostname": "audit-box",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/hosts": {
+					"type": "file",
+					"content": "127.0.0.1 localhost\n10.0.1.2 audit-box\n10.0.1.10 db02\n10.0.1.20 app02\n10.0.1.30 print01\n"
+				},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\ndeploy:x:1001:1001:Deploy:/home/deploy:/bin/bash\n"
+				},
+				"/srv": {"type": "dir"},
+				"/srv/datos": {"type": "dir", "owner": "deploy", "group": "staff", "mode": "750"},
+				"/srv/datos/balance.csv": {
+					"type": "file",
+					"owner": "deploy",
+					"group": "staff",
+					"mode": "640",
+					"content": "mes,total\nenero,1200\nfebrero,1340\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/pendientes.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "Auditar la red 10.0.1.0/24 con permiso del cliente.\nEquipos conocidos: db02, app02, print01.\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.1.10",
+			"hostname": "db02",
+			"os": "Linux",
+			"responds_to_ping": false,
+			"services": [
+				{"port": 3306, "state": "open", "name": "mysql", "product": "MariaDB", "version": "10.3.29", "banner": "5.5.5-10.3.29-MariaDB"}
+			]
+		},
+		{
+			"ip": "10.0.1.20",
+			"hostname": "app02",
+			"os": "Linux",
+			"services": [
+				{"port": 2222, "state": "open", "name": "ssh", "guessed_name": "unknown", "product": "OpenSSH", "version": "7.9p1", "banner": "SSH-2.0-OpenSSH_7.9p1"},
+				{"port": 8000, "state": "open", "name": "http", "product": "nginx", "version": "1.14.0", "banner": "nginx/1.14.0"},
+				{"port": 8080, "state": "filtered", "name": "http-proxy"}
+			],
+			"sites": {
+				"8000": {
+					"server": "nginx/1.14.0",
+					"routes": {
+						"/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html"},
+							"body": "<html>\n<head><title>Aplicación interna</title></head>\n<body><h1>Gestión de pedidos</h1></body>\n</html>\n"
+						},
+						"/robots.txt": {
+							"status": 200,
+							"headers": {"Content-Type": "text/plain"},
+							"body": "User-agent: *\nDisallow: /panel-old/\n"
+						},
+						"/panel-old/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html"},
+							"body": "<html>\n<head><title>Panel antiguo</title></head>\n<body><h1>Administración (versión anterior)</h1>\n<p>Acceso sin autenticación. Usuario de pruebas: demo / demo1234</p>\n</body>\n</html>\n"
+						}
+					}
+				}
+			}
+		},
+		{
+			"ip": "10.0.1.30",
+			"hostname": "print01",
+			"os": "Linux",
+			"services": [
+				{"port": 9100, "state": "open", "name": "jetdirect"}
+			]
+		}
+	]
+}

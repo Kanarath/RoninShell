@@ -5,10 +5,19 @@ extends RefCounted
 const CommandResult := preload("res://engine/shell/command_result.gd")
 
 var tracker: RefCounted
+var controller: RefCounted = null
 
 
-func _init(mission_tracker: RefCounted) -> void:
+func _init(mission_tracker: RefCounted, lab_controller: RefCounted = null) -> void:
 	tracker = mission_tracker
+	controller = lab_controller
+
+
+## En modo libre no hay objetivos: las órdenes que dependen de ellos lo explican en vez de fallar raro.
+func _free_mode_error() -> RefCounted:
+	if controller != null and controller.mode == "libre":
+		return CommandResult.error("Estás en modo libre: no hay objetivos ni pistas. Escribe `modo mision` para volver a tu misión.")
+	return null
 
 
 func register_all(registry: RefCounted) -> void:
@@ -68,6 +77,9 @@ func _hallazgo(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 
 
 func _revisar(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	var blocked := _free_mode_error()
+	if blocked != null:
+		return blocked
 	var spec: Dictionary = tracker.engine.report_spec()
 	if spec.is_empty():
 		return CommandResult.error("revisar: ahora mismo no hay ningún informe que revisar.")
@@ -101,6 +113,9 @@ func _revisar(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 
 
 func _mision(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	var blocked := _free_mode_error()
+	if blocked != null:
+		return blocked
 	return CommandResult.ok(tracker.mission_text())
 
 
@@ -113,6 +128,9 @@ func _perfil(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
 
 
 func _pista(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	var blocked := _free_mode_error()
+	if blocked != null:
+		return blocked
 	var engine: RefCounted = tracker.engine
 	var number := 0
 	if args.is_empty():
@@ -141,6 +159,9 @@ func _pista(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 
 
 func _responder(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	var blocked := _free_mode_error()
+	if blocked != null:
+		return blocked
 	var engine: RefCounted = tracker.engine
 	var objective: Dictionary = engine.active_question()
 	if objective.is_empty():

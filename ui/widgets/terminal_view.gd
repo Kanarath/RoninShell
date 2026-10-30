@@ -78,6 +78,16 @@ func setup(shell_session: RefCounted, banner: Array = []) -> void:
 	focus_input.call_deferred()
 
 
+## Cambia a otra sesión (reinicio del laboratorio, repaso...) sin borrar lo que ya hay en pantalla.
+func replace_session(new_session: RefCounted, lines: Array = []) -> void:
+	session = new_session
+	_navigator.reset()
+	for line: String in lines:
+		print_text(line, Palette.TEXT_DIM if line != "" else Palette.TEXT)
+	_update_prompt()
+	focus_input.call_deferred()
+
+
 ## Ejecuta una línea como si el jugador la hubiera escrito y pulsado Enter.
 func submit(line: String) -> void:
 	if session == null:

@@ -38,6 +38,26 @@ func load_into(mission_engine: RefCounted) -> bool:
 	return mission_engine.load_dict(json.data)
 
 
+## Guarda datos arbitrarios (progreso de misiones + repasos). Devuelve true si se guardó.
+func save_data(data: Dictionary) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_warning("No se pudo guardar el progreso en %s" % path)
+		return false
+	file.store_string(JSON.stringify(data, "\t"))
+	return true
+
+
+## Lee lo guardado: {} si no hay archivo o está dañado.
+func load_data() -> Dictionary:
+	if not has_save():
+		return {}
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
+	return json.data
+
+
 func delete() -> void:
 	if has_save():
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

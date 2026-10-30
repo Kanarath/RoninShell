@@ -24,6 +24,8 @@ static func passes(check: Dictionary, events: Array) -> bool:
 	var contains: Dictionary = check.get("contains", {})
 	var matching: Array = []
 	for event: Dictionary in events:
+		if event.get("free", false):
+			continue  # lo hecho en modo libre no cuenta para los objetivos
 		if event["type"] == check.get("event", "") and _matches(event, where) and _contains(event, contains):
 			matching.append(event)
 

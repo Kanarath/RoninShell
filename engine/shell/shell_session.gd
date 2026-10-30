@@ -31,10 +31,17 @@ var findings: Array[Dictionary] = []
 var tracker: RefCounted = null
 
 
+## En modo libre lo que haces se registra marcado como "free": se ve en el mapa, pero no cuenta
+## para ningún objetivo ni da XP (ver ObjectiveCheck).
+var free_mode: bool = false
+
+
 func record(event_type: String, data := {}) -> void:
 	var event: Dictionary = data.duplicate()
 	event["type"] = event_type
 	event["order"] = events.size()
+	if free_mode:
+		event["free"] = true
 	events.append(event)
 
 

@@ -1,0 +1,246 @@
+{
+	"id": "repaso",
+	"title": "Retos de repaso",
+	"lab": "repaso_red",
+	"missions": [
+		{
+			"id": "r_permisos",
+			"concept": "permisos",
+			"title": "Repaso: permisos",
+			"briefing": "Otra máquina, otro archivo. Hay datos de la empresa en /srv/datos que no puedes abrir: demuestra por qué, igual que la otra vez, pero fíjate en una cosa nueva.",
+			"objectives": [
+				{
+					"id": "r_permisos_dir",
+					"text": "Averigua por qué no puedes entrar en /srv/datos: mira los permisos del directorio y compáralos con tu identidad",
+					"short": "Por qué no puedes entrar en /srv/datos",
+					"concept": "permisos",
+					"check": {"all": [
+						{"event": "file_stat", "where": {"path": "/srv/datos"}},
+						{"event": "identity_checked"}
+					]},
+					"hints": [
+						"Para entrar en un directorio hace falta un permiso concreto sobre él. ¿Cuál? Necesitas ver los permisos del directorio y quién eres.",
+						"`ls -l /srv` muestra los permisos de `datos` (un directorio también tiene dueño, grupo y permisos) y `id` tus grupos.",
+						"Mira el directorio desde fuera: `ls -l /srv` y luego `id`. Verás `drwxr-x---`, dueño deploy y grupo staff; tú no estás en staff, así que caes en 'otros' y no tienes el permiso x para entrar."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_descubrimiento",
+			"concept": "descubrimiento_hosts",
+			"title": "Repaso: descubrimiento de hosts",
+			"briefing": "El cliente asegura que db02 existe, pero no responde al ping. ¿Está vivo? Demuéstralo con pruebas, no con suposiciones.",
+			"objectives": [
+				{
+					"id": "r_disc_db",
+					"text": "Encuentra qué servicio ofrece db02, que no responde al descubrimiento normal (reúne la prueba del ping y la del escaneo)",
+					"short": "Encuentra el servicio de db02",
+					"concept": "descubrimiento_hosts",
+					"check": {"all": [
+						{"event": "ping_no_reply", "where": {"ip": "10.0.1.10"}},
+						{"event": "port_found", "where": {"ip": "10.0.1.10", "port": 3306, "state": "open"}}
+					]},
+					"hints": [
+						"Reúne dos pruebas que parecen contradecirse: una que dice 'no responde' y otra que dice 'está ahí'.",
+						"La primera es un ping a db02. La segunda, un escaneo de puertos que no dependa del descubrimiento previo.",
+						"`ping -c 2 db02` y después `nmap -Pn db02`: aparece 3306/tcp abierto (mysql). No responder al ping no es estar apagado."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_puertos",
+			"concept": "puertos_servicios",
+			"title": "Repaso: puertos y servicios",
+			"briefing": "app02 tiene más servicios de los que enseña un escaneo normal. Un administrador cambió un servicio a un puerto poco habitual.",
+			"objectives": [
+				{
+					"id": "r_ports_app",
+					"text": "Encuentra el servicio de acceso remoto de app02, que no está en el puerto habitual",
+					"short": "Encuentra el servicio oculto de app02",
+					"concept": "puertos_servicios",
+					"check": {"event": "port_found", "where": {"ip": "10.0.1.20", "port": 2222, "state": "open"}},
+					"hints": [
+						"El escaneo por defecto no mira todos los puertos. ¿Qué pasa con un servicio en un puerto raro?",
+						"Nmap puede escanear un puerto concreto, un rango o todos los puertos (mira `nmap --help`).",
+						"`nmap -p- app02` (o `nmap -p 2222 app02`) revela 2222/tcp abierto. Con `-sV` verás que es OpenSSH."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_versiones",
+			"concept": "versiones",
+			"title": "Repaso: versiones",
+			"briefing": "db02 ofrece un servicio de base de datos. Averigua qué producto y qué versión es. Recuerda cómo llegar hasta un host que ignora el ping.",
+			"objectives": [
+				{
+					"id": "r_ver_db",
+					"text": "Identifica el producto y la versión del servicio de db02",
+					"short": "Versión del servicio de db02",
+					"concept": "versiones",
+					"check": {"event": "service_version", "where": {"ip": "10.0.1.10", "port": 3306}},
+					"hints": [
+						"Ya sabes cómo escanear un host que ignora el ping y cómo pedir versiones: combina las dos cosas.",
+						"Una opción de nmap se salta el descubrimiento y otra detecta versiones.",
+						"`nmap -Pn -sV db02` muestra MariaDB 10.3.29 en el 3306."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_http",
+			"concept": "http",
+			"title": "Repaso: HTTP",
+			"briefing": "app02 sirve una web en un puerto no estándar. Mírala como lo haría un navegador y sigue las pistas que el propio servidor deja.",
+			"objectives": [
+				{
+					"id": "r_http_old",
+					"text": "Pide el contenido del directorio antiguo que el robots.txt de app02 intenta esconder",
+					"short": "Consigue la ruta que esconde robots.txt",
+					"concept": "http",
+					"check": {"event": "http_response", "where": {"ip": "10.0.1.20", "port": 8000, "path": "/panel-old/", "status": 200}},
+					"hints": [
+						"app02 sirve una web en un puerto que no es el 80. Los servidores web suelen publicar un archivo con instrucciones para buscadores.",
+						"`curl app02:8000/robots.txt` indica qué ruta no quieren que se indexe.",
+						"Pide después esa ruta con curl: `curl app02:8000/panel-old/`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_hallazgos",
+			"concept": "analisis_hallazgos",
+			"title": "Repaso: análisis de hallazgos",
+			"briefing": "Has visto una versión concreta en db02. ¿Qué has demostrado de verdad con ella? Regístralo con la clasificación que corresponde.",
+			"objectives": [
+				{
+					"id": "r_hall_ver",
+					"text": "Identifica la versión del servicio de db02",
+					"short": "Versión del servicio de db02",
+					"concept": "versiones",
+					"check": {"event": "service_version", "where": {"ip": "10.0.1.10", "port": 3306}},
+					"hints": [
+						"db02 no responde al descubrimiento normal, pero tiene un servicio.",
+						"Combina la opción que se salta el descubrimiento con la que detecta versiones.",
+						"`nmap -Pn -sV db02`."
+					]
+				},
+				{
+					"id": "r_hall_class",
+					"text": "Registra la versión de MariaDB en tu cuaderno con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica lo de MariaDB (hallazgo)",
+					"concept": "analisis_hallazgos",
+					"requires": ["r_hall_ver"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["indicio", "hipotesis"]}, "contains": {"text": ["mariadb"]}},
+					"classify": {
+						"keywords": ["mariadb"],
+						"accepted": ["indicio", "hipotesis"],
+						"ok": "Bien clasificado: una versión orienta, pero no prueba una vulnerabilidad. Es un indicio hasta que lo confirmes.",
+						"feedback": {
+							"confirmado": "'Confirmado' exige una prueba repetible de que existe el problema. Una versión no lo es: solo sabes qué está instalado.",
+							"falso-positivo": "Un falso positivo es algo que parecía un problema y has descartado. Aquí aún no has descartado nada."
+						}
+					},
+					"hints": [
+						"Piensa en qué has demostrado: que existe un fallo, o solo que hay una versión concreta instalada.",
+						"Escribe `hallazgo` para repasar los cuatro tipos y descarta el que exige una prueba que no tienes.",
+						"Por ejemplo `hallazgo indicio \"MariaDB 10.3.29 en db02:3306\"`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_informe",
+			"concept": "informe",
+			"title": "Repaso: informe",
+			"briefing": "El panel antiguo de app02 está al descubierto. Consíguelo, clasifica el hallazgo y redáctalo con criterio profesional.",
+			"objectives": [
+				{
+					"id": "r_inf_obtener",
+					"text": "Consigue el panel antiguo que esconde el robots.txt de app02",
+					"short": "Consigue el panel antiguo de app02",
+					"concept": "http",
+					"check": {"event": "http_response", "where": {"ip": "10.0.1.20", "port": 8000, "path": "/panel-old/", "status": 200}},
+					"hints": [
+						"app02 sirve una web en el puerto 8000 y su robots.txt menciona una ruta.",
+						"`curl app02:8000/robots.txt` te dice cuál es.",
+						"`curl app02:8000/panel-old/`."
+					]
+				},
+				{
+					"id": "r_inf_clasif",
+					"text": "Registra el panel antiguo como hallazgo con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica el panel antiguo",
+					"concept": "analisis_hallazgos",
+					"requires": ["r_inf_obtener"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["panel-old"]}},
+					"classify": {
+						"keywords": ["panel-old"],
+						"accepted": ["confirmado"],
+						"ok": "Correcto: lo has obtenido tú con una petición repetible, así que está confirmado.",
+						"feedback": {
+							"indicio": "Ya no es un indicio: pediste la ruta y el servidor la entregó. Es una prueba repetible.",
+							"hipotesis": "No es una hipótesis: lo has comprobado.",
+							"falso-positivo": "No lo es: el panel existe y es accesible."
+						}
+					},
+					"hints": [
+						"¿Viste el panel mencionado, o lo conseguiste tú con una petición?",
+						"Un hallazgo es 'confirmado' cuando tienes una prueba que cualquiera puede repetir.",
+						"Por ejemplo `hallazgo confirmado \"panel-old expuesto en app02:8000/panel-old/\"`."
+					]
+				},
+				{
+					"id": "r_inf_informe",
+					"text": "Redacta el hallazgo en informe/borrador.md y supera la revisión (`revisar`)",
+					"short": "Redacta el informe y revísalo",
+					"concept": "informe",
+					"requires": ["r_inf_clasif"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 80,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué es: describe el hallazgo", "any": ["panel", "antiguo", "administración"]},
+							{"id": "donde", "label": "Dónde: ruta o sistema afectado", "any": ["/panel-old", "app02", "10.0.1.20"]},
+							{"id": "evidencia", "label": "Evidencia: cómo se demuestra", "any": ["get ", "200", "curl", "petición", "respuesta"]},
+							{"id": "impacto", "label": "Impacto: qué permite", "any": ["acceso", "sin autenticación", "credencial", "administración"]},
+							{"id": "recomendacion", "label": "Recomendación: qué hacer", "any": ["elimin", "retir", "borr", "restring", "proteger"]}
+						]
+					},
+					"hints": [
+						"Un buen hallazgo responde a: qué es, dónde está, cómo se demuestra, qué impacto tiene y qué se recomienda.",
+						"Escribe con `echo \"...\" >> informe/borrador.md` y usa `revisar` para ver qué falta. No afirmes más de lo que probaste.",
+						"Ejemplo: echo \"Panel de administración antiguo expuesto en app02:8000/panel-old/, accesible sin autenticación (GET devuelve 200). Recomendación: retirarlo o restringir el acceso.\" >> informe/borrador.md y después `revisar`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_interpretacion",
+			"concept": "interpretacion_resultados",
+			"title": "Repaso: interpretar resultados",
+			"briefing": "app02 tiene un puerto 8080 filtrado. Demuestra qué significa comparándolo con uno cerrado, como la otra vez.",
+			"objectives": [
+				{
+					"id": "r_interp_filtrado",
+					"text": "Demuestra la diferencia entre un puerto cerrado y uno filtrado en app02 intentando conectar a ambos con curl",
+					"short": "Cerrado vs filtrado en app02",
+					"concept": "interpretacion_resultados",
+					"check": {"all": [
+						{"event": "connection_refused", "where": {"ip": "10.0.1.20"}},
+						{"event": "connection_timeout", "where": {"ip": "10.0.1.20"}}
+					]},
+					"hints": [
+						"Un puerto filtrado y uno cerrado responden de forma distinta a una conexión real. Provócalas las dos.",
+						"Con `curl` puedes intentar conectar a cualquier puerto de app02: prueba el 8080 (filtrado) y uno que sepas cerrado, como el 8081.",
+						"`curl app02:8080` termina en 'timed out' (nadie responde) y `curl app02:8081` en 'Connection refused' (la máquina rechaza al instante)."
+					]
+				}
+			]
+		}
+	]
+}

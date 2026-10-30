@@ -8,6 +8,8 @@ const MissionEngine := preload("res://engine/missions/mission_engine.gd")
 const MASTERY_LABEL := {"solo": "por tu cuenta", "ayuda": "con ayuda", "solucion": "con la solución"}
 
 var engine: RefCounted
+## En un reto de repaso no se anuncian misiones completadas ni niveles: eso lo cuenta el repaso.
+var quiet_mission_end: bool = false
 
 
 func _init(mission_engine: RefCounted) -> void:
@@ -25,7 +27,7 @@ func format_notifications(notifications: Array, level_before: int) -> Array[Stri
 	for item: Dictionary in notifications:
 		if item["type"] == "objective":
 			lines.append("[+] Objetivo completado: %s  (+%d XP, %s)" % [item["text"], item["xp"], MASTERY_LABEL[item["mastery"]]])
-		else:
+		elif not quiet_mission_end:
 			lines.append("*** Misión completada: %s ***" % item["title"])
 			if engine.is_finished():
 				lines.append("Has completado todas las misiones de este laboratorio. Usa `perfil` para ver lo que has demostrado.")
@@ -34,7 +36,7 @@ func format_notifications(notifications: Array, level_before: int) -> Array[Stri
 				lines.append("Nueva misión: %s" % next["title"])
 				lines.append(next["briefing"])
 				lines.append("Escribe `mision` para ver tus objetivos.")
-	if engine.level() > level_before:
+	if engine.level() > level_before and not quiet_mission_end:
 		lines.append("Nivel %d alcanzado." % engine.level())
 	# Si lo que acabas de hacer desbloquea una pregunta de autoevaluación, avisa una vez.
 	var completed: Array[String] = []
