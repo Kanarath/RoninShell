@@ -23,6 +23,8 @@ const BreakReminder := preload("res://game/break_reminder.gd")
 const CheatsheetPanel := preload("res://ui/widgets/cheatsheet_panel.gd")
 const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
 const DebugPanel := preload("res://ui/widgets/debug_panel.gd")
+const ProfilePanel := preload("res://ui/widgets/profile_panel.gd")
+const Profile := preload("res://engine/profile.gd")
 const StartMenu := preload("res://ui/widgets/start_menu.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
@@ -71,6 +73,9 @@ var settings: RefCounted = Settings.new()
 var cheatsheet_panel := CheatsheetPanel.new()
 var settings_panel := SettingsPanel.new()
 var debug_panel := DebugPanel.new()
+var profile_panel := ProfilePanel.new()
+var _unlocked: Array[String] = []
+var _stats := {"review_passes": 0}
 var start_menu := StartMenu.new()
 var _menu_return := false
 var break_reminder := BreakReminder.new()
@@ -106,6 +111,7 @@ func _ready() -> void:
 	var demo_commands: Array = []
 	var screenshot_path := ""
 	var show_menu := persist   # los tests y las capturas (sin guardado) arrancan directos al juego
+	var open_profile := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--run="):
 			demo_commands = arg.trim_prefix("--run=").split("~~")
@@ -123,10 +129,16 @@ func _ready() -> void:
 		elif arg == "--open=debug":
 			debug_panel.open()
 			show_menu = false
+		elif arg == "--open=profile":
+			open_profile = true
+			show_menu = false
 		elif arg == "--open=menu":
 			show_menu = true
 	for command: String in demo_commands:
 		terminal.submit(command)
+	if open_profile:
+		_refresh_profile()
+		profile_panel.open()
 	if show_menu:
 		_open_menu()
 	if screenshot_path != "":
@@ -137,7 +149,7 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if _any_window_open():
-			for panel in [cheatsheet_panel, settings_panel, debug_panel]:
+			for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
 				panel.close()
 			if start_menu.is_open() and start_menu.continue_button.disabled == false:
 				start_menu.close_menu()   # Esc en el menú equivale a continuar
@@ -146,7 +158,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _any_window_open() -> bool:
-	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or start_menu.is_open()
+	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or profile_panel.is_open() or start_menu.is_open()
 
 
 ## F1 chuleta, F9 menú, F10 ajustes, F11 pruebas, F2 efectos.
@@ -155,17 +167,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match event.keycode:
 		KEY_F1:
-			settings_panel.close()
-			debug_panel.close()
+			for other in [settings_panel, debug_panel, profile_panel]:
+				other.close()
 			cheatsheet_panel.toggle()
 		KEY_F10:
-			cheatsheet_panel.close()
-			debug_panel.close()
+			for other in [cheatsheet_panel, debug_panel, profile_panel]:
+				other.close()
 			settings_panel.toggle()
 		KEY_F11:
-			cheatsheet_panel.close()
-			settings_panel.close()
+			for other in [cheatsheet_panel, settings_panel, profile_panel]:
+				other.close()
 			debug_panel.toggle()
+		KEY_F3:
+			for other in [cheatsheet_panel, settings_panel, debug_panel]:
+				other.close()
+			_toggle_profile()
 		KEY_F9:
 			if start_menu.is_open():
 				start_menu.close_menu()
@@ -187,7 +203,7 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
@@ -202,6 +218,52 @@ func _build_modals() -> void:
 	start_menu.settings_pressed.connect(func() -> void: _open_from_menu(settings_panel))
 	start_menu.debug_pressed.connect(func() -> void: _open_from_menu(debug_panel))
 	start_menu.quit_pressed.connect(func() -> void: get_tree().quit())
+
+
+func _toggle_profile() -> void:
+	if profile_panel.is_open():
+		profile_panel.close()
+	else:
+		_refresh_profile()
+		profile_panel.open()
+
+
+## Lo que muestra el perfil: árbol de habilidades y logros, calculados del progreso real.
+func _refresh_profile() -> void:
+	var achievements := Profile.evaluate(engines, _stats)
+	var unlocked_count := Profile.unlocked_ids(achievements).size()
+	var total_xp := 0
+	var evidence := 0
+	var evidence_total := 0
+	for engine: RefCounted in engines.values():
+		total_xp += engine.xp
+		for card: Dictionary in engine.evidence_cards():
+			evidence_total += 1
+			evidence += 1 if card["collected"] else 0
+	var summary := "NV %d  ·  %d XP  ·  Evidencias %d/%d  ·  Logros %d/%d  ·  Repasos superados %d" % [
+		total_xp / Profile.XP_PER_LEVEL + 1, total_xp, evidence, evidence_total, unlocked_count, achievements.size(), _stats["review_passes"],
+	]
+	profile_panel.refresh(summary, Profile.concept_levels(engines), Profile.concept_counts(engines), achievements)
+
+
+## Anuncia los logros recién conseguidos (una sola vez cada uno).
+func _check_achievements() -> void:
+	if engines.is_empty():
+		return
+	for item: Dictionary in Profile.evaluate(engines, _stats):
+		if item["unlocked"] and not item["id"] in _unlocked:
+			_unlocked.append(item["id"])
+			terminal.print_text("[*] Logro desbloqueado: %s  -  %s" % [item["title"], item["description"]], Palette.GOLD)
+			mascot.react("happy", 4.0)
+	if profile_panel.is_open():
+		_refresh_profile()
+
+
+## Marca como ya conseguidos los logros que se cumplen ahora, sin avisar (al cargar o tras un salto de prueba).
+func _sync_achievements_silently() -> void:
+	if engines.is_empty():
+		return
+	_unlocked = Profile.unlocked_ids(Profile.evaluate(engines, _stats))
 
 
 ## Mientras hay una ventana abierta, el teclado es suyo; al cerrarla, vuelve a la terminal.
@@ -219,7 +281,7 @@ func _on_modal_changed() -> void:
 
 
 func _open_menu() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
 		panel.close()
 	_menu_return = false
 	start_menu.open_menu(_has_progress(), _menu_summary())
@@ -386,6 +448,8 @@ func _reboot(delete_saved: bool) -> void:
 	sessions.clear()
 	_seen_available.clear()
 	scheduler = ReviewScheduler.new()
+	_unlocked = []
+	_stats = {"review_passes": 0}
 	controller.mode = "mision"
 	controller.current_review_concept = ""
 	controller.take_requests()
@@ -418,6 +482,9 @@ func _on_debug_action(action_name: String, data: Dictionary) -> void:
 			cheatsheet_panel.open()
 		"open_settings":
 			settings_panel.open()
+		"open_profile":
+			_refresh_profile()
+			profile_panel.open()
 		"open_menu":
 			_open_menu()
 			return
@@ -437,6 +504,8 @@ func _on_debug_action(action_name: String, data: Dictionary) -> void:
 			keep_open = false
 	if not keep_open:
 		debug_panel.close()
+	if action_name in ["jump_mission", "give_xp"]:
+		_sync_achievements_silently()   # un salto de prueba no cuenta como haberlo conseguido
 	_update_book_states()
 	network_map.refresh()
 	_refresh_missions()
@@ -545,7 +614,7 @@ func campaign_to_dict() -> Dictionary:
 	var campaign := {}
 	for id: String in engines:
 		campaign[id] = engines[id].to_dict()
-	return {"campaign": campaign, "active_book": active_book, "reviews": scheduler.to_dict()}
+	return {"campaign": campaign, "active_book": active_book, "reviews": scheduler.to_dict(), "achievements": _unlocked.duplicate(), "stats": _stats.duplicate()}
 
 
 ## Restaura el progreso. Acepta también los formatos antiguos (solo el primer libro).
@@ -565,6 +634,14 @@ func load_campaign(data: Dictionary) -> bool:
 		scheduler.load_dict(data.get("reviews", {}))
 	else:
 		engines[first].load_dict(data)
+	var saved_stats = data.get("stats", {})
+	_stats = {"review_passes": int(saved_stats.get("review_passes", 0)) if typeof(saved_stats) == TYPE_DICTIONARY else 0}
+	if data.has("achievements") and typeof(data["achievements"]) == TYPE_ARRAY:
+		_unlocked = []
+		for id in data["achievements"]:
+			_unlocked.append(str(id))
+	else:
+		_sync_achievements_silently()   # guardado anterior a los logros: lo ya cumplido no se anuncia de golpe
 	return true
 
 
@@ -584,6 +661,7 @@ func _on_command_executed(line: String, result: RefCounted) -> void:
 		_check_review_finished()
 	_update_book_states()
 	_announce_unlocks()
+	_check_achievements()
 	network_map.refresh()
 	_refresh_missions()
 	_save_progress()
@@ -665,6 +743,7 @@ func _check_review_finished() -> void:
 		_exit_review("Repaso completado viendo la solución: no pasa nada, vuelve pronto para practicarlo de nuevo.")
 	else:
 		main_engine.award_xp(REVIEW_XP)
+		_stats["review_passes"] += 1
 		_exit_review("Repaso superado: +%d XP. Este concepto tardará más en volver a tocar." % REVIEW_XP)
 		mascot.react("happy", 4.0)
 
@@ -873,7 +952,7 @@ func _build_top_bar() -> Control:
 	brand.add_child(_build_xp_bar())
 
 	var hint := Label.new()
-	hint.text = "F1  chuleta   F9  menú   F10  ajustes   F11  pruebas"
+	hint.text = "F1  chuleta   F3  perfil   F9  menú   F10  ajustes   F11  pruebas"
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

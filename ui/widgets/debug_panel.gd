@@ -52,6 +52,7 @@ func setup(campaign: Array, review_concepts: Array) -> void:
 	var windows := _grid()
 	_button(windows, "Chuleta (F1)", "open_cheatsheet")
 	_button(windows, "Ajustes (F10)", "open_settings")
+	_button(windows, "Perfil (F3)", "open_profile")
 	_button(windows, "Menú inicial (F9)", "open_menu")
 
 	_section("Estado y ayudas")
