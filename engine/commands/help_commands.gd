@@ -3,6 +3,7 @@ extends RefCounted
 
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const CommandDocs := preload("res://engine/commands/command_docs.gd")
+const ConceptDocs := preload("res://engine/commands/concept_docs.gd")
 
 
 func register_all(registry: RefCounted) -> void:
@@ -14,8 +15,11 @@ func _man(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	if args.is_empty():
 		return CommandResult.error("What manual page do you want?\nFor example, try 'man man'.")
 	var name: String = args[0]
+	if ConceptDocs.has(name):
+		session.record("help_viewed", {"tool": name, "via": "man"})
+		return CommandResult.ok(ConceptDocs.page(name))
 	if not CommandDocs.has(name):
-		return CommandResult.error("No manual entry for %s" % name, 16)
+		return CommandResult.error("No manual entry for %s. Conceptos disponibles: %s" % [name, ", ".join(ConceptDocs.topics())], 16)
 	session.record("help_viewed", {"tool": name, "via": "man"})
 	return CommandResult.ok(CommandDocs.man_page(name))
 

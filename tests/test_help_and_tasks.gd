@@ -79,7 +79,7 @@ func test_man_muestra_la_ficha_completa_con_limites() -> void:
 		assert_true(section in page, "la ficha incluye %s" % section)
 	assert_true("filtered" in flat and "no se puede saber" in flat)
 	assert_true("Una versión (-sV) no prueba que haya una vulnerabilidad" in flat, "enseña qué NO concluir")
-	assert_eq(s.run("man zzz").stderr, "No manual entry for zzz\n")
+	assert_true(s.run("man zzz").stderr.begins_with("No manual entry for zzz"))
 	assert_eq(s.run("man zzz").exit_code, 16)
 	assert_true("What manual page do you want?" in s.run("man").stderr)
 
