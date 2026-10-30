@@ -10,7 +10,8 @@ Jugable: un laboratorio ("Primer contacto") con 4 misiones y 17 objetivos, de la
 
 Qué hay hecho:
 - **Motor de laboratorio** (`engine/`): estado del mundo cargado desde datos, intérprete de comandos (comillas, tuberías, redirecciones, errores estilo bash), permisos Unix reales y comandos `ls cd cat head tail wc sort uniq grep find chmod whoami id` más `ping`, `nmap` y `curl` simulados desde el mismo estado.
-- **Misiones** (`engine/missions/`, `data/missions/`): objetivos que se comprueban sobre lo observado (no sobre el comando exacto), preguntas de interpretación, pistas en 3-4 niveles, XP por nivel de ayuda, evidencias y perfil de competencias. Órdenes de juego: `mision`, `pista`, `responder`, `expediente`, `perfil`.
+- **Misiones** (`engine/missions/`, `data/missions/`): los objetivos se demuestran en la terminal y se comprueban sobre lo observado, no sobre el comando exacto. Cuatro tipos: observar, contrastar (provocar las dos situaciones que hay que distinguir), clasificar (`hallazgo`: indicio, hipótesis, confirmado, falso positivo) y redactar (`revisar` comprueba tu informe contra una lista). Pistas en 3-4 niveles, XP por nivel de ayuda, evidencias y perfil de competencias. La autoevaluación tipo test es opcional (`responder`).
+- **Ayuda integrada**: `<comando> --help`, `man <comando>` (con límites y "qué NO puedes concluir"), `help`, y `cheatsheet [tema]`.
 - **Interfaz** (`ui/`): terminal interactiva (escribir directo, historial con flechas, Tab, Ctrl+L), paneles de misión, mapa de red y expediente, con VFX mínimo.
 - **Progreso** guardado en tu equipo (`user://`).
 

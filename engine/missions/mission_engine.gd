@@ -16,19 +16,24 @@ const XP_HELP := 70         # con pistas de orientación
 const XP_SOLUTION := 30     # tras ver la solución explicada
 const TRANSFER_BONUS := 1.5 # los objetivos de transferencia (otro escenario) valen más
 const XP_PER_LEVEL := 300
+const OPTIONAL_FACTOR := 0.5 # la autoevaluación opcional da la mitad: es un extra, no un peaje
 
 var book: Dictionary
 var xp: int = 0
 var mission_index: int = 0
 var _state: Dictionary = {}     # id de objetivo -> {status, hints_used, attempts, mastery, xp}
 var _evidence: Array[String] = []  # ids de las evidencias conseguidas, en orden
+var _mission_of: Dictionary = {}   # id de objetivo -> índice de su misión
 
 
 func _init(mission_book: Dictionary) -> void:
 	book = mission_book
+	var index := 0
 	for mission: Dictionary in book["missions"]:
 		for objective: Dictionary in mission["objectives"]:
 			_state[objective["id"]] = {"status": "pending", "hints_used": 0, "attempts": 0, "mastery": "", "xp": 0}
+			_mission_of[objective["id"]] = index
+		index += 1
 
 
 # --- Consulta -----------------------------------------------------------------
@@ -77,10 +82,47 @@ func active_objective() -> Dictionary:
 	return {}
 
 
+## Un objetivo opcional no hace falta para terminar la misión (p. ej. la autoevaluación).
+func is_optional(objective: Dictionary) -> bool:
+	return objective.get("optional", false)
+
+
+## La pregunta que se puede contestar ahora. Incluye las opcionales de misiones anteriores:
+## que hayas avanzado no te quita la oportunidad de autoevaluarte.
 func active_question() -> Dictionary:
+	var newest := mini(mission_index, book["missions"].size() - 1)
+	for index in range(newest, -1, -1):
+		for objective: Dictionary in book["missions"][index]["objectives"]:
+			if objective.has("question") and status_of(objective["id"]) == "pending" and is_available(objective):
+				return objective
+	return {}
+
+
+## Evalúa la clasificación de un hallazgo contra los objetivos "classify" de la misión actual.
+## Devuelve {matched, accepted, message}; matched = false si ningún objetivo trata de ese tema.
+func classify(kind: String, text: String) -> Dictionary:
+	var lowered := text.to_lower()
 	for objective: Dictionary in objectives():
-		if objective.has("question") and status_of(objective["id"]) == "pending" and is_available(objective):
-			return objective
+		if not objective.has("classify") or status_of(objective["id"]) == "done":
+			continue
+		var spec: Dictionary = objective["classify"]
+		var topic_found := true
+		for keyword in spec["keywords"]:
+			if not lowered.contains(str(keyword).to_lower()):
+				topic_found = false
+		if not topic_found:
+			continue
+		if kind in spec["accepted"]:
+			return {"matched": true, "accepted": true, "message": spec["ok"]}
+		return {"matched": true, "accepted": false, "message": spec["feedback"].get(kind, "Esa clasificación no encaja con lo que has demostrado.")}
+	return {"matched": false, "accepted": false, "message": ""}
+
+
+## El informe que hay que revisar ahora (objetivo con "report" pendiente y disponible), o {}.
+func report_spec() -> Dictionary:
+	for objective: Dictionary in objectives():
+		if objective.has("report") and status_of(objective["id"]) == "pending" and is_available(objective):
+			return objective["report"]
 	return {}
 
 
@@ -198,7 +240,10 @@ func _complete(objective: Dictionary) -> Array:
 	elif state["hints_used"] > 0:
 		mastery = "ayuda"
 		base = XP_HELP
-	var earned := int(base * (TRANSFER_BONUS if objective.get("transfer", false) else 1.0))
+	var multiplier := TRANSFER_BONUS if objective.get("transfer", false) else 1.0
+	if is_optional(objective):
+		multiplier = OPTIONAL_FACTOR
+	var earned := int(base * multiplier)
 
 	state["status"] = "done"
 	state["mastery"] = mastery
@@ -208,12 +253,14 @@ func _complete(objective: Dictionary) -> Array:
 		_evidence.append(objective["evidence"]["id"])
 
 	var notifications: Array = [{"type": "objective", "id": id, "text": objective["text"], "xp": earned, "mastery": mastery}]
-	var mission := current_mission()
-	var all_done := true
+	# La misión a la que pertenece el objetivo (puede ser una anterior, si era opcional).
+	var owner_index: int = _mission_of[id]
+	var mission: Dictionary = book["missions"][owner_index]
+	var required_done := true
 	for other: Dictionary in mission["objectives"]:
-		if status_of(other["id"]) != "done":
-			all_done = false
-	if all_done:
+		if not is_optional(other) and status_of(other["id"]) != "done":
+			required_done = false
+	if required_done and owner_index == mission_index:
 		notifications.append({"type": "mission", "id": mission["id"], "title": mission["title"]})
 		mission_index += 1
 	return notifications

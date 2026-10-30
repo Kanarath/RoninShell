@@ -73,6 +73,10 @@ static func _validate_objective(objective: Dictionary, mission_id: String, seen_
 		errors.append("%s: 'check' no es válido" % context)
 	elif has_question:
 		_validate_question(objective["question"], context, errors)
+	if objective.has("classify"):
+		_validate_classify(objective["classify"], context, errors)
+	if objective.has("report"):
+		_validate_report(objective["report"], context, errors)
 
 	var hints = objective.get("hints", [])
 	if typeof(hints) != TYPE_ARRAY or hints.size() < MIN_HINTS or hints.size() > MAX_HINTS:
@@ -85,6 +89,49 @@ static func _validate_objective(objective: Dictionary, mission_id: String, seen_
 		var evidence = objective["evidence"]
 		if typeof(evidence) != TYPE_DICTIONARY or str(evidence.get("id", "")) == "" or str(evidence.get("title", "")) == "":
 			errors.append("%s: la evidencia necesita 'id' y 'title'" % context)
+
+
+const CLASSIFICATIONS := ["indicio", "hipotesis", "confirmado", "falso-positivo"]
+
+
+## "classify": qué clasificación se espera para un hallazgo y qué se le dice al jugador si se equivoca.
+static func _validate_classify(classify: Variant, context: String, errors: Array) -> void:
+	if typeof(classify) != TYPE_DICTIONARY:
+		errors.append("%s: 'classify' debe ser un objeto" % context)
+		return
+	var keywords = classify.get("keywords", [])
+	if typeof(keywords) != TYPE_ARRAY or keywords.is_empty():
+		errors.append("%s: 'classify' necesita 'keywords'" % context)
+	var accepted = classify.get("accepted", [])
+	if typeof(accepted) != TYPE_ARRAY or accepted.is_empty():
+		errors.append("%s: 'classify' necesita 'accepted'" % context)
+	else:
+		for kind in accepted:
+			if not str(kind) in CLASSIFICATIONS:
+				errors.append("%s: clasificación desconocida '%s'" % [context, kind])
+	if str(classify.get("ok", "")) == "":
+		errors.append("%s: 'classify' necesita el mensaje 'ok'" % context)
+	var feedback = classify.get("feedback", {})
+	if typeof(feedback) != TYPE_DICTIONARY:
+		errors.append("%s: 'feedback' debe ser un objeto tipo -> explicación" % context)
+	else:
+		for kind in CLASSIFICATIONS:
+			if not kind in accepted and str(feedback.get(kind, "")) == "":
+				errors.append("%s: falta explicar por qué '%s' no es la clasificación correcta" % [context, kind])
+
+
+## "report": archivo a revisar y lista de comprobación.
+static func _validate_report(report: Variant, context: String, errors: Array) -> void:
+	if typeof(report) != TYPE_DICTIONARY or not str(report.get("path", "")).begins_with("/"):
+		errors.append("%s: 'report' necesita 'path' absoluto" % context)
+		return
+	var elements = report.get("elements", [])
+	if typeof(elements) != TYPE_ARRAY or elements.is_empty():
+		errors.append("%s: 'report' necesita 'elements'" % context)
+		return
+	for element in elements:
+		if typeof(element) != TYPE_DICTIONARY or str(element.get("label", "")) == "" or typeof(element.get("any", null)) != TYPE_ARRAY or element["any"].is_empty():
+			errors.append("%s: cada elemento del informe necesita 'label' y 'any'" % context)
 
 
 static func _validate_question(question: Variant, context: String, errors: Array) -> void:

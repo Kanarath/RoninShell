@@ -15,8 +15,89 @@ func register_all(registry: RefCounted) -> void:
 	registry.register("mision", "[juego] Muestra la misión y tus objetivos", _mision)
 	registry.register("pista", "[juego] Pide una pista (pista N para el objetivo N)", _pista)
 	registry.register("responder", "[juego] Responde a la pregunta activa (responder 2)", _responder)
+	registry.register("hallazgo", "[juego] Registra un hallazgo con su clasificación", _hallazgo)
+	registry.register("revisar", "[juego] Revisa tu informe contra la lista de comprobación", _revisar)
 	registry.register("expediente", "[juego] Muestra las evidencias reunidas", _expediente)
 	registry.register("perfil", "[juego] Muestra tu nivel y competencias", _perfil)
+
+
+const ReportReview := preload("res://engine/missions/report_review.gd")
+const Vfs := preload("res://engine/vfs.gd")
+
+const FINDING_TYPES := {
+	"indicio": "indicio", "hipotesis": "hipotesis", "hipótesis": "hipotesis", "confirmado": "confirmado",
+	"falso-positivo": "falso-positivo", "falsopositivo": "falso-positivo", "falso_positivo": "falso-positivo",
+}
+const FINDING_HELP := "TIPOS DE HALLAZGO\n" \
+	+ "  indicio          un dato que sugiere algo, pero no lo demuestra (p. ej. una versión)\n" \
+	+ "  hipotesis        una explicación posible que aún hay que comprobar\n" \
+	+ "  confirmado       demostrado con una prueba que otra persona puede repetir\n" \
+	+ "  falso-positivo   parecía un problema y has comprobado que no lo es\n" \
+	+ "Uso: hallazgo <tipo> \"descripción\"\n"
+
+
+func _hallazgo(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	if args.is_empty():
+		var text: String = FINDING_HELP
+		if session.findings.is_empty():
+			text += "\nTodavía no has registrado ningún hallazgo.\n"
+		else:
+			text += "\nTU CUADERNO DE HALLAZGOS\n"
+			for finding: Dictionary in session.findings:
+				text += "  [%s] %s\n" % [finding["type"].to_upper(), finding["text"]]
+		return CommandResult.ok(text)
+
+	var kind: String = FINDING_TYPES.get(str(args[0]).to_lower(), "")
+	if kind == "":
+		return CommandResult.error("hallazgo: tipo desconocido '%s' (usa indicio, hipotesis, confirmado o falso-positivo)" % args[0])
+	var description := " ".join(args.slice(1)).strip_edges()
+	if description == "":
+		return CommandResult.error("hallazgo: falta la descripción. Uso: hallazgo <tipo> \"descripción\"")
+
+	session.findings.append({"type": kind, "text": description})
+	session.record("finding_recorded", {"kind": kind, "text": description})
+	var result := CommandResult.ok("Hallazgo registrado como %s: %s\n" % [kind.to_upper(), description])
+	var verdict: Dictionary = tracker.engine.classify(kind, description)
+	if verdict["matched"]:
+		if verdict["accepted"]:
+			result.stdout += "  => %s\n" % verdict["message"]
+		else:
+			result.stdout += "  => No cuadra: %s\n" % verdict["message"]
+			result.exit_code = 1
+	return result
+
+
+func _revisar(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	var spec: Dictionary = tracker.engine.report_spec()
+	if spec.is_empty():
+		return CommandResult.error("revisar: ahora mismo no hay ningún informe que revisar.")
+	var shown: String = args[0] if not args.is_empty() else spec["path"]
+	var path := Vfs.normalize(session.cwd, shown)
+	var fs = session.host.fs
+	if not fs.exists(path):
+		return CommandResult.error("revisar: %s: No such file or directory" % shown)
+	if fs.is_dir(path):
+		return CommandResult.error("revisar: %s: Is a directory" % shown)
+	if not fs.check_access(path, session.user, "r"):
+		return CommandResult.error("revisar: %s: Permission denied" % shown)
+
+	var review: Dictionary = ReportReview.review(fs.read_file(path), spec)
+	var text := "REVISIÓN DEL INFORME: %s\n" % shown
+	var missing := 0
+	for element: Dictionary in review["elements"]:
+		text += "  [%s] %s\n" % ["x" if element["ok"] else " ", element["label"]]
+		missing += 0 if element["ok"] else 1
+	for warning: String in review["warnings"]:
+		text += "  ! %s\n" % warning
+	var result := CommandResult.ok(text)
+	if review["complete"]:
+		result.stdout += "El informe cumple la lista de comprobación. Un informe real, además, debe permitir a otra persona repetir tus pasos.\n"
+		session.record("report_complete", {"path": path})
+	else:
+		if missing > 0:
+			result.stdout += "Faltan %d elemento(s). Completa el informe y vuelve a usar `revisar`.\n" % missing
+		result.exit_code = 1
+	return result
 
 
 func _mision(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:

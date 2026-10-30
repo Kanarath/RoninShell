@@ -82,6 +82,7 @@ func _ping(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		out += "\n--- %s ping statistics ---\n" % target
 		out += "%d packets transmitted, 0 received, 100%% packet loss, time %dms\n" % [count, (count - 1) * 1000 + count * 3]
 		result.exit_code = 1
+		session.record("ping_no_reply", {"ip": ip})
 	else:
 		# Apagada o inexistente en la red local: el propio equipo informa de que no la alcanza.
 		for seq in range(1, count + 1):
@@ -89,6 +90,7 @@ func _ping(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		out += "\n--- %s ping statistics ---\n" % target
 		out += "%d packets transmitted, 0 received, +%d errors, 100%% packet loss, time %dms\n" % [count, count, (count - 1) * 1000 + count * 3]
 		result.exit_code = 1
+		session.record("ping_no_reply", {"ip": ip})
 	result.stdout = out
 	return result
 
@@ -436,6 +438,10 @@ func _curl(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		var fetched := _fetch(session, url, flags.has("v"))
 		result.stderr += fetched["verbose"]
 		if fetched["error"] != "":
+			if fetched["code"] == 7:
+				session.record("connection_refused", {"ip": fetched.get("ip", ""), "port": fetched.get("port", 0)})
+			elif fetched["code"] == 28:
+				session.record("connection_timeout", {"ip": fetched.get("ip", ""), "port": fetched.get("port", 0)})
 			if not flags.has("s") or flags.has("S"):
 				result.stderr += fetched["error"] + "\n"
 			result.exit_code = fetched["code"]
@@ -497,6 +503,8 @@ func _fetch(session: RefCounted, url: String, verbose: bool) -> Dictionary:
 	if host_text == "localhost":
 		ip = Network.LOCALHOST_IP
 
+	failure["ip"] = ip
+	failure["port"] = port
 	if verbose:
 		failure["verbose"] += "*   Trying %s:%d...\n" % [ip, port]
 	var service = host.get_service(port) if host != null else null

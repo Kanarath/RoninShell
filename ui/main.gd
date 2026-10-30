@@ -127,6 +127,8 @@ func _rebuild_objectives() -> void:
 
 	var active: Dictionary = mission_engine.active_objective()
 	for objective: Dictionary in mission_engine.objectives():
+		if mission_engine.is_optional(objective):
+			continue  # la autoevaluación opcional no ocupa sitio: se avisa con una línea aparte
 		var state := SealIcon.State.PENDING
 		var tag := "PENDIENTE"
 		var tag_color: Color = Palette.GOLD_DIM
@@ -153,12 +155,15 @@ func _rebuild_objectives() -> void:
 		var texts := VBoxContainer.new()
 		texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		texts.add_theme_constant_override("separation", 0)
-		var title := _colored_label(objective["text"], Palette.TEXT_DIM if state == SealIcon.State.DONE else Palette.TEXT, 13)
+		var title := _colored_label(objective.get("short", objective["text"]), Palette.TEXT_DIM if state == SealIcon.State.DONE else Palette.TEXT, 13)
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		texts.add_child(title)
 		texts.add_child(_colored_label("[%s]" % tag, tag_color, 10))
 		row.add_child(texts)
 		content.add_child(row)
+
+	if not mission_engine.active_question().is_empty():
+		content.add_child(_colored_label("+ Autoevaluación opcional: escribe  responder", Palette.TEAL_DIM, 11))
 
 
 func _rebuild_dossier() -> void:

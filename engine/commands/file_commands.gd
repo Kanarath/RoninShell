@@ -27,8 +27,10 @@ func register_all(registry: RefCounted) -> void:
 	registry.register("grep", "Busca texto con expresiones regulares (-i -n -v -c -r)", _grep)
 	registry.register("find", "Busca archivos (-name, -type f|d)", _find)
 	registry.register("chmod", "Cambia permisos (755, u+x...)", _chmod)
+	registry.register("stat", "Muestra dueño, grupo y permisos de un archivo", _stat)
 	registry.register("whoami", "Muestra tu usuario", _whoami)
 	registry.register("id", "Muestra tu identidad y grupos", _id)
+	registry.register("groups", "Muestra los grupos a los que perteneces", _groups)
 	registry.register("hostname", "Muestra el nombre de la máquina", _hostname)
 	registry.register("history", "Muestra los comandos escritos", _history)
 
@@ -130,6 +132,9 @@ func _ls(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		for target: String in file_targets:
 			entries.append({"label": target, "path": _abs(session, target)})
 		blocks.append(_format_entries(fs, entries, long_format, false))
+		if long_format:
+			for entry: Dictionary in entries:
+				session.record("file_stat", {"path": entry["path"]})
 
 	for target: String in dir_targets:
 		var dir_path := _abs(session, target)
@@ -150,6 +155,9 @@ func _ls(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 			var entry_path := dir_path if name == "." else (dir_path.get_base_dir() if name == ".." else dir_path.path_join(name))
 			entries.append({"label": name, "path": entry_path})
 		var body := _format_entries(fs, entries, long_format, true)
+		if long_format:
+			for entry: Dictionary in entries:
+				session.record("file_stat", {"path": entry["path"]})
 		if targets.size() > 1:
 			body = "%s:\n%s" % [target, body]
 		blocks.append(body)
@@ -508,7 +516,7 @@ func _chmod(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		if new_mode == "":
 			return CommandResult.error("chmod: invalid mode: ‘%s’" % spec)
 		fs.set_mode(path, new_mode)
-		session.record("mode_changed", {"path": path, "mode": new_mode})
+		session.record("mode_changed", {"path": path, "mode": new_mode, "owner_read": (int(new_mode[0]) & 4) != 0})
 	return result
 
 
@@ -542,17 +550,71 @@ func _apply_mode_spec(current: String, spec: String) -> String:
 
 
 func _whoami(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	session.record("identity_checked", {"tool": "whoami"})
 	return CommandResult.ok(session.user["name"] + "\n")
 
 
 func _id(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	session.record("identity_checked", {"tool": "id"})
 	var uid: int = session.user["uid"]
 	var groups: Array[String] = []
 	for group_name in session.user["groups"]:
-		groups.append("%d(%s)" % [uid, group_name])
+		groups.append("%d(%s)" % [_gid_of(session, group_name), group_name])
 	return CommandResult.ok("uid=%d(%s) gid=%d(%s) groups=%s\n" % [
 		uid, session.user["name"], uid, session.user["name"], ",".join(groups),
 	])
+
+
+func _groups(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	session.record("identity_checked", {"tool": "groups"})
+	return CommandResult.ok(" ".join(session.user["groups"]) + "\n")
+
+
+const KNOWN_GIDS := {"root": 0, "adm": 4, "shadow": 42}
+
+
+## Números de usuario y grupo estables: los de la lista del host o, si no, uno derivado del nombre.
+func _uid_of(session: RefCounted, user_name: String) -> int:
+	for user: Dictionary in session.host.users:
+		if user["name"] == user_name:
+			return int(user["uid"])
+	return 100 + user_name.hash() % 900
+
+
+func _gid_of(session: RefCounted, group_name: String) -> int:
+	if KNOWN_GIDS.has(group_name):
+		return KNOWN_GIDS[group_name]
+	return _uid_of(session, group_name)
+
+
+## stat: la forma "larga" de ver quién es el dueño de un archivo y qué permisos tiene.
+func _stat(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	if args.is_empty():
+		return CommandResult.error("stat: missing operand")
+	var fs = session.host.fs
+	var result := CommandResult.new()
+	for file_arg: String in args:
+		var path := _abs(session, file_arg)
+		if not fs.exists(path):
+			_fail(result, "stat: cannot statx '%s': No such file or directory" % file_arg)
+			continue
+		if path != "/" and not fs.check_access(path.get_base_dir(), session.user, "x"):
+			_fail(result, "stat: cannot statx '%s': Permission denied" % file_arg)
+			continue
+		var info: Dictionary = fs.get_node_info(path)
+		var size: int = fs.size_of(path)
+		var kind: String = "directory" if info["type"] == "dir" else ("regular empty file" if size == 0 else "regular file")
+		var blocks: int = 8 if info["type"] == "dir" else (0 if size == 0 else maxi(8, int(ceil(size / 4096.0)) * 8))
+		var stamp := "2026-10-29 12:00:00.000000000 +0000"
+		result.stdout += "  File: %s\n" % file_arg
+		result.stdout += "  Size: %-10d\tBlocks: %-10d IO Block: 4096   %s\n" % [size, blocks, kind]
+		result.stdout += "Device: 8,1\tInode: %-10d Links: %d\n" % [131072 + path.hash() % 9000, 2 if info["type"] == "dir" else 1]
+		result.stdout += "Access: (0%s/%s)  Uid: (%5d/%8s)   Gid: (%5d/%8s)\n" % [
+			info["mode"], fs.mode_string(path), _uid_of(session, info["owner"]), info["owner"], _gid_of(session, info["group"]), info["group"],
+		]
+		result.stdout += "Access: %s\nModify: %s\nChange: %s\n Birth: -\n" % [stamp, stamp, stamp]
+		session.record("file_stat", {"path": path})
+	return result
 
 
 func _hostname(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:

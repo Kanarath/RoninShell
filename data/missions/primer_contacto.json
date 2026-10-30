@@ -6,7 +6,7 @@
 		{
 			"id": "m1_orientacion",
 			"title": "Orientación",
-			"briefing": "Acabas de entrar en ronin-box, tu máquina de trabajo. Antes de tocar la red, oriéntate: dónde estás, qué hay a tu alrededor y qué te dejan hacer.",
+			"briefing": "Acabas de entrar en ronin-box, tu máquina de trabajo. Antes de tocar la red, oriéntate: dónde estás, qué hay a tu alrededor y qué te dejan hacer. Cuando dudes de un comando: `man <comando>`, `<comando> --help` o `cheatsheet`.",
 			"objectives": [
 				{
 					"id": "m1_nota",
@@ -24,11 +24,12 @@
 				{
 					"id": "m1_oculto",
 					"text": "Encuentra y lee el archivo oculto de tu directorio personal",
+					"short": "Encuentra y lee el archivo oculto",
 					"concept": "archivos_ocultos",
 					"check": {"event": "file_read", "where": {"path": "/home/ronin/.hidden"}},
 					"hints": [
 						"No todo lo que hay en un directorio aparece con un `ls` normal. ¿Por qué podría ocultarse algo?",
-						"En Linux, los archivos cuyo nombre empieza por un punto se consideran ocultos. Revisa las opciones de `ls`.",
+						"En Linux, los archivos cuyo nombre empieza por un punto se consideran ocultos. Revisa las opciones de `ls` (`ls --help`).",
 						"Prueba `ls -a` y lee el archivo que veas con un punto delante.",
 						"`ls -a` muestra también los archivos ocultos: aparece `.hidden`, y se lee con `cat .hidden`. Un `ls` a secas no te enseña todo; lo oculto no es secreto, solo no se muestra por defecto."
 					]
@@ -59,9 +60,46 @@
 					]
 				},
 				{
-					"id": "m1_q_shadow",
-					"text": "Interpreta por qué falló la lectura de /etc/shadow",
+					"id": "m1_permisos",
+					"text": "Averigua por qué no puedes leer /etc/shadow: mira sus permisos (dueño y grupo) y compáralos con tu identidad",
+					"short": "Averigua por qué no puedes leer shadow",
 					"concept": "permisos",
+					"requires": ["m1_shadow"],
+					"check": {"all": [
+						{"event": "file_stat", "where": {"path": "/etc/shadow"}},
+						{"event": "identity_checked"}
+					]},
+					"evidence": {"id": "ev_shadow", "title": "Permisos de shadow", "detail": "root:shadow con rw-r-----; ronin no está en ese grupo"},
+					"hints": [
+						"Un permiso relaciona dos cosas: el archivo (dueño, grupo, permisos) y tú (usuario y grupos). Necesitas los dos lados.",
+						"Para ver dueño, grupo y permisos hay un formato largo de `ls` y el comando `stat`. Para saber quién eres y a qué grupos perteneces, `id`.",
+						"Prueba `ls -l /etc/shadow` y después `id`; compara el dueño y el grupo del archivo con tus grupos.",
+						"`ls -l /etc/shadow` muestra `-rw-r----- root shadow`: el dueño (root) lee y escribe, el grupo shadow lee y 'otros' no pueden nada. `id` muestra que eres ronin y no estás en el grupo shadow: caes en 'otros' y por eso recibes Permission denied."
+					]
+				},
+				{
+					"id": "m1_transfer",
+					"text": "Transferencia: haz ilegible tu propia nota.txt con chmod y comprueba que ya no puedes leerla",
+					"short": "Transferencia: haz ilegible nota.txt",
+					"concept": "permisos",
+					"transfer": true,
+					"requires": ["m1_permisos"],
+					"check": {"all": [
+						{"event": "mode_changed", "where": {"path": "/home/ronin/nota.txt", "owner_read": false}},
+						{"event": "permission_denied", "where": {"path": "/home/ronin/nota.txt"}}
+					]},
+					"hints": [
+						"Si entiendes los permisos, deberías poder provocar el mismo error en un archivo tuyo. ¿Qué permiso controla la lectura para el dueño?",
+						"`chmod` cambia permisos y `ls -l` te deja comprobar el resultado (`chmod --help` explica el formato).",
+						"Quita todos los permisos de `nota.txt` con `chmod 000 nota.txt` y luego intenta leerla con `cat`.",
+						"`chmod 000 nota.txt` quita todos los permisos; `cat nota.txt` da Permission denied aunque el archivo sea tuyo. Para devolverlo: `chmod 644 nota.txt`. Entender un error es poder provocarlo y arreglarlo."
+					]
+				},
+				{
+					"id": "m1_q_shadow",
+					"text": "Autoevaluación: ¿por qué falla la lectura de /etc/shadow?",
+					"concept": "permisos",
+					"optional": true,
 					"requires": ["m1_shadow"],
 					"question": {
 						"prompt": "`cat /etc/shadow` devuelve `Permission denied`. ¿Qué es lo más correcto concluir?",
@@ -85,7 +123,7 @@
 		{
 			"id": "m2_quien_esta_ahi",
 			"title": "Quién está ahí",
-			"briefing": "La nota habla de una red autorizada. Antes de atacar nada hay que saber qué hay en ella, y qué NO puedes asegurar todavía.",
+			"briefing": "La nota habla de una red autorizada. Antes de atacar nada hay que saber qué hay en ella, y qué NO puedes asegurar todavía. Recuerda: `nmap --help` y `man nmap` explican cada opción y qué no deduces de ella.",
 			"objectives": [
 				{
 					"id": "m2_ping",
@@ -103,6 +141,7 @@
 				{
 					"id": "m2_barrido",
 					"text": "Descubre los hosts activos de la red 10.0.0.0/24",
+					"short": "Descubre los hosts de 10.0.0.0/24",
 					"concept": "descubrimiento_hosts",
 					"check": {"event": "host_discovered", "distinct": "ip", "min": 2},
 					"evidence": {"id": "ev_hosts", "title": "Hosts activos", "detail": "ronin-box (10.0.0.2) y web01 (10.0.0.5)"},
@@ -110,12 +149,13 @@
 						"Ya sabes qué red es la autorizada. ¿Hay forma de preguntar a toda la red a la vez, sin escanear puertos todavía?",
 						"Nmap puede hacer solo descubrimiento de hosts, sin mirar puertos.",
 						"Mira la opción `-sn` de nmap y úsala con el rango 10.0.0.0/24.",
-						"`nmap -sn 10.0.0.0/24` lista los hosts que responden. ¿Esperabas ver más máquinas? Esa duda es la siguiente pregunta."
+						"`nmap -sn 10.0.0.0/24` lista los hosts que responden. ¿Esperabas ver más máquinas?"
 					]
 				},
 				{
 					"id": "m2_hosts_file",
 					"text": "Lee /etc/hosts para ver qué máquinas conoce el sistema",
+					"short": "Lee /etc/hosts",
 					"concept": "descubrimiento_hosts",
 					"check": {"event": "file_read", "where": {"path": "/etc/hosts"}},
 					"evidence": {"id": "ev_hosts_file", "title": "Máquinas conocidas", "detail": "/etc/hosts lista ronin-box, web01 y files01"},
@@ -127,9 +167,28 @@
 					]
 				},
 				{
-					"id": "m2_q_files01",
-					"text": "Interpreta qué ocurre con files01",
+					"id": "m2_vivo",
+					"text": "Demuestra que files01 está vivo aunque no responda al ping: reúne las dos pruebas (ping y nmap)",
+					"short": "Demuestra que files01 está vivo",
 					"concept": "interpretacion_resultados",
+					"requires": ["m2_barrido", "m2_hosts_file"],
+					"check": {"all": [
+						{"event": "ping_no_reply", "where": {"ip": "10.0.0.9"}},
+						{"event": "port_found", "where": {"ip": "10.0.0.9", "port": 21, "state": "open"}}
+					]},
+					"evidence": {"id": "ev_files01", "title": "files01 está vivo", "detail": "Ignora el ping, pero 21/tcp (ftp) está abierto"},
+					"hints": [
+						"Hay que juntar dos pruebas que parecen contradecirse: una que dice 'no responde' y otra que dice 'está ahí'.",
+						"La primera es un ping a files01. La segunda, un escaneo de sus puertos que no dependa del descubrimiento previo.",
+						"Haz `ping -c 2 10.0.0.9` y después `nmap -Pn 10.0.0.9`.",
+						"El ping no recibe respuesta, pero `nmap -Pn` encuentra 21/tcp abierto (ftp). Conclusión: no responder al ping no equivale a estar apagado."
+					]
+				},
+				{
+					"id": "m2_q_files01",
+					"text": "Autoevaluación: qué concluir de que files01 no salga en el barrido",
+					"concept": "interpretacion_resultados",
+					"optional": true,
 					"requires": ["m2_barrido", "m2_hosts_file"],
 					"question": {
 						"prompt": "files01 (10.0.0.9) aparece en /etc/hosts pero no en el barrido `nmap -sn`. ¿Qué conclusión es correcta?",
@@ -145,7 +204,7 @@
 						"Piensa en qué demuestra exactamente 'no responde'. ¿Es lo mismo que 'no existe'?",
 						"Un cortafuegos puede descartar los sondeos de descubrimiento sin apagar la máquina.",
 						"Descarta primero las opciones que afirman algo que no puedes demostrar con lo que has visto.",
-						"Es la 2: no responder a un sondeo no prueba que el host no exista; puede estar vivo y filtrando el descubrimiento. En la siguiente misión lo comprobarás."
+						"Es la 2: no responder a un sondeo no prueba que el host no exista; puede estar vivo y filtrando el descubrimiento."
 					]
 				}
 			]
@@ -172,25 +231,21 @@
 					]
 				},
 				{
-					"id": "m3_q_filtrado",
-					"text": "Interpreta el estado 'filtered' del puerto 8080",
+					"id": "m3_cerrado_filtrado",
+					"text": "Demuestra la diferencia entre un puerto cerrado y uno filtrado intentando conectar a ambos con curl",
+					"short": "Cerrado vs filtrado, con curl",
 					"concept": "interpretacion_resultados",
 					"requires": ["m3_puertos"],
-					"question": {
-						"prompt": "En el escaneo, 8080/tcp aparece como `filtered`. ¿Qué significa?",
-						"options": [
-							{"text": "Está abierto, pero protegido con contraseña.", "why": "El estado no habla de contraseñas: habla de si nmap pudo determinar si el puerto está abierto o cerrado."},
-							{"text": "Está cerrado.", "why": "Un puerto cerrado responde con un rechazo (`closed`). `filtered` es distinto: no hubo una respuesta clara."},
-							{"text": "Nmap no puede saber si está abierto o cerrado: algo (como un cortafuegos) interfiere con los sondeos.", "why": "Correcto. `filtered` significa 'no se pudo determinar'. Puedes comprobarlo con `curl web01:8080` y compararlo con un puerto cerrado como `curl web01:81`."},
-							{"text": "Está abierto.", "why": "Si estuviera abierto, nmap lo mostraría como `open`."}
-						],
-						"correct": 2
-					},
+					"check": {"all": [
+						{"event": "connection_refused", "where": {"ip": "10.0.0.5"}},
+						{"event": "connection_timeout", "where": {"ip": "10.0.0.5"}}
+					]},
+					"evidence": {"id": "ev_filtrado", "title": "Cerrado vs filtrado", "detail": "81 rechaza al instante (closed); 8080 no responde (filtered)"},
 					"hints": [
-						"Compara los tres estados que has visto: open, closed y filtered. ¿Qué respuesta recibió nmap en cada caso?",
-						"Una respuesta de rechazo es información; la ausencia de respuesta es otra cosa distinta.",
-						"Prueba `curl web01:8080` y `curl web01:81` y compara los errores.",
-						"Es la 3: `filtered` = nmap no puede determinar el estado porque algo filtra los paquetes. No es ni abierto ni cerrado: es 'no se sabe'."
+						"Ya viste que 8080 aparece filtrado. ¿Cómo se comporta una conexión real contra un puerto cerrado frente a uno filtrado?",
+						"Con `curl` puedes intentar conectar a cualquier puerto. Compara dos: el filtrado que viste y uno que sepas cerrado.",
+						"Prueba `curl web01:8080` (filtrado) y `curl web01:81` (cerrado) y compara los errores.",
+						"El cerrado responde al instante con 'Connection refused' (la máquina te dice que no); el filtrado termina en 'Connection timed out' (nadie responde: algo descarta los paquetes). Por eso `filtered` significa 'no se puede saber'."
 					]
 				},
 				{
@@ -207,9 +262,49 @@
 					]
 				},
 				{
+					"id": "m3_clasificar_version",
+					"text": "Registra lo de Apache 2.4.49 en tu cuaderno con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica lo de Apache (hallazgo)",
+					"concept": "analisis_hallazgos",
+					"requires": ["m3_version"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["indicio", "hipotesis"]}, "contains": {"text": ["apache"]}},
+					"classify": {
+						"keywords": ["apache"],
+						"accepted": ["indicio", "hipotesis"],
+						"ok": "Bien clasificado: una versión es un dato que orienta, no una vulnerabilidad probada. Quedaría como hipótesis de trabajo hasta confirmarla.",
+						"feedback": {
+							"confirmado": "'Confirmado' exige una prueba repetible de que existe el problema. Con `nmap -sV` solo sabes la versión; que esa versión tenga fallos y sean alcanzables aún no lo has demostrado.",
+							"falso-positivo": "Un falso positivo es algo que parecía un problema y has descartado. Aquí aún no has descartado nada: solo has visto una versión."
+						}
+					},
+					"hints": [
+						"Un hallazgo no siempre es una vulnerabilidad. ¿Qué has demostrado exactamente sobre Apache 2.4.49: que existe el fallo, o solo que esa versión está instalada?",
+						"El juego distingue cuatro tipos: indicio, hipótesis, confirmado y falso-positivo. Escribe `hallazgo` para ver qué significa cada uno.",
+						"Usa `hallazgo <tipo> \"texto\"` mencionando Apache. Descarta el tipo que exigiría una prueba que no tienes.",
+						"Por ejemplo `hallazgo indicio \"Apache 2.4.49 en web01:80\"`. Es un indicio (o una hipótesis de trabajo): sabes la versión, pero no has demostrado que sea vulnerable."
+					]
+				},
+				{
+					"id": "m3_ftp_version",
+					"text": "Transferencia: identifica la versión del servicio de files01 sin descubrimiento previo",
+					"short": "Transferencia: versión del FTP",
+					"concept": "versiones",
+					"transfer": true,
+					"requires": ["m2_vivo"],
+					"check": {"event": "service_version", "where": {"ip": "10.0.0.9", "port": 21}},
+					"evidence": {"id": "ev_ftp", "title": "FTP de files01", "detail": "vsftpd 3.0.3 en 21/tcp"},
+					"hints": [
+						"Ya sabes cómo escanear un host que ignora el ping y cómo pedir versiones. ¿Puedes combinar ambas cosas?",
+						"Dos opciones de nmap: una para saltarse el descubrimiento y otra para detectar versiones.",
+						"Usa `-Pn` y `-sV` juntas contra 10.0.0.9.",
+						"`nmap -Pn -sV 10.0.0.9` muestra `vsftpd 3.0.3` en el 21. Has combinado dos ideas que aprendiste por separado."
+					]
+				},
+				{
 					"id": "m3_q_version",
-					"text": "Interpreta qué demuestra una versión",
-					"concept": "interpretacion_resultados",
+					"text": "Autoevaluación: qué demuestra una versión",
+					"concept": "analisis_hallazgos",
+					"optional": true,
 					"requires": ["m3_version"],
 					"question": {
 						"prompt": "Nmap muestra Apache httpd 2.4.49 en el puerto 80. ¿Qué puedes afirmar con seguridad?",
@@ -226,21 +321,6 @@
 						"Para llamar vulnerabilidad a algo necesitas una prueba, no solo un número de versión.",
 						"Descarta las opciones que afirman algo sin pruebas, y también las que lo niegan todo.",
 						"Es la 2: la versión es un dato; la vulnerabilidad aún es una hipótesis que habría que confirmar."
-					]
-				},
-				{
-					"id": "m3_oculto",
-					"text": "Encuentra el servicio del host que ignora el descubrimiento",
-					"concept": "descubrimiento_hosts",
-					"transfer": true,
-					"requires": ["m2_q_files01"],
-					"check": {"event": "port_found", "where": {"ip": "10.0.0.9", "port": 21, "state": "open"}},
-					"evidence": {"id": "ev_files01", "title": "Servicio oculto", "detail": "files01 (10.0.0.9) ejecuta ftp en el 21 aunque ignora el ping"},
-					"hints": [
-						"Ya sabes que files01 existe y que no contesta al descubrimiento. ¿Cómo escaneas sus puertos sin ese paso previo?",
-						"Nmap hace descubrimiento antes de escanear, salvo que se lo indiques.",
-						"Mira la opción `-Pn` de nmap y úsala contra 10.0.0.9.",
-						"`nmap -Pn 10.0.0.9` salta el descubrimiento y escanea igualmente: aparece 21/tcp open ftp. El host estaba vivo: ignorar el ping no equivale a estar apagado."
 					]
 				}
 			]
@@ -266,6 +346,7 @@
 				{
 					"id": "m4_backup",
 					"text": "Consigue el archivo de configuración antiguo expuesto en /backup/",
+					"short": "Consigue el config.old de /backup/",
 					"concept": "http",
 					"requires": ["m4_robots"],
 					"check": {"event": "http_response", "where": {"ip": "10.0.0.5", "path": "/backup/config.old", "status": 200}},
@@ -278,9 +359,61 @@
 					]
 				},
 				{
-					"id": "m4_q_informe",
-					"text": "Redacta el hallazgo con criterio profesional",
+					"id": "m4_clasificar",
+					"text": "Registra el archivo expuesto en tu cuaderno con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica el archivo expuesto",
+					"concept": "analisis_hallazgos",
+					"requires": ["m4_backup"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["config.old"]}},
+					"classify": {
+						"keywords": ["config.old"],
+						"accepted": ["confirmado"],
+						"ok": "Correcto: lo has obtenido tú mismo con una petición que se puede repetir (GET con respuesta 200), así que está confirmado.",
+						"feedback": {
+							"indicio": "Aquí ya no es un indicio: no solo viste una pista, descargaste el archivo y leíste su contenido. Eso es una prueba repetible.",
+							"hipotesis": "No es una hipótesis: la has comprobado. Pediste el archivo y el servidor lo entregó.",
+							"falso-positivo": "No lo es: el archivo existe, es accesible y expone credenciales. Es real."
+						}
+					},
+					"hints": [
+						"Piensa qué has hecho con ese archivo: ¿lo viste mencionado, o lo conseguiste?",
+						"Un hallazgo es 'confirmado' cuando tienes una prueba que cualquiera puede repetir.",
+						"Registra con `hallazgo` el tipo que corresponda, mencionando config.old.",
+						"`hallazgo confirmado \"config.old expuesto en /backup/config.old\"`: la petición GET devuelve 200 con credenciales y es repetible."
+					]
+				},
+				{
+					"id": "m4_informe",
+					"text": "Redacta el hallazgo en informe/borrador.md y supera la revisión (`revisar`)",
+					"short": "Redacta el informe y revísalo",
 					"concept": "informe",
+					"requires": ["m4_clasificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 80,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué es: describe el hallazgo", "any": ["configuración", "config.old", "credenciales"]},
+							{"id": "donde", "label": "Dónde: ruta o sistema afectado", "any": ["/backup/config.old", "/backup/", "web01", "10.0.0.5"]},
+							{"id": "evidencia", "label": "Evidencia: cómo se demuestra", "any": ["get ", "200", "curl", "petición", "respuesta"]},
+							{"id": "impacto", "label": "Impacto: qué permite", "any": ["credencial", "contraseña", "base de datos", "acceso"]},
+							{"id": "recomendacion", "label": "Recomendación: qué hacer", "any": ["elimin", "borr", "retir", "rota", "restring", "cambiar las credenciales"]}
+						]
+					},
+					"evidence": {"id": "ev_informe", "title": "Informe del hallazgo", "detail": "borrador.md supera la revisión"},
+					"hints": [
+						"Un buen hallazgo responde a cinco preguntas: qué es, dónde está, cómo se demuestra, qué impacto tiene y qué se recomienda.",
+						"Escribe en `informe/borrador.md` con `echo \"...\" >> informe/borrador.md` (una o varias líneas) y luego usa `revisar`.",
+						"`revisar` te dirá qué elemento falta. Evita afirmar más de lo que probaste: nada de 'hackeado' o 'comprometido'.",
+						"Ejemplo: echo \"Archivo de configuración antiguo expuesto en /backup/config.old, accesible sin autenticación (GET devuelve 200) y con credenciales de base de datos. Recomendación: eliminarlo y rotar las credenciales.\" >> informe/borrador.md y después `revisar`."
+					]
+				},
+				{
+					"id": "m4_q_informe",
+					"text": "Autoevaluación: cómo describir el hallazgo",
+					"concept": "informe",
+					"optional": true,
 					"requires": ["m4_backup"],
 					"question": {
 						"prompt": "¿Cuál es la mejor forma de describir el hallazgo en un informe?",

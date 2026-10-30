@@ -267,6 +267,18 @@ func test_todas_las_preguntas_del_libro_explican_todas_las_opciones() -> void:
 
 # --- Integración: el laboratorio real, jugado de principio a fin ---
 
+## Una forma válida de resolver cada misión, solo con comandos de terminal (sin tests).
+const M1_STEPS := ["cat nota.txt", "ls -a", "cat .hidden", "cat /etc/passwd", "cat /etc/shadow", "ls -l /etc/shadow", "id", "chmod 000 nota.txt", "cat nota.txt"]
+const M2_STEPS := ["ping -c 2 web01", "nmap -sn 10.0.0.0/24", "cat /etc/hosts", "ping -c 2 10.0.0.9", "nmap -Pn 10.0.0.9"]
+const M3_STEPS := ["nmap web01", "curl web01:81", "curl web01:8080", "nmap -sV web01", "hallazgo indicio 'Apache 2.4.49 en web01:80'", "nmap -Pn -sV 10.0.0.9"]
+const M4_STEPS := [
+	"curl web01/robots.txt", "curl web01/backup/", "curl web01/backup/config.old",
+	"hallazgo confirmado 'config.old expuesto en /backup/config.old'",
+	"echo 'Archivo de configuración antiguo expuesto en /backup/config.old, accesible sin autenticación (GET devuelve 200) y con credenciales de base de datos. Recomendación: eliminarlo y rotar las credenciales.' >> informe/borrador.md",
+	"revisar",
+]
+
+
 func _game() -> Dictionary:
 	var world = LabLoader.load_file("res://data/labs/primer_contacto.json")["world"]
 	var book: Dictionary = MissionLoader.load_file(BOOK_PATH)["book"]
@@ -287,15 +299,15 @@ func _play(game: Dictionary, lines: Array) -> Array:
 func test_el_laboratorio_se_puede_completar_de_principio_a_fin() -> void:
 	var game := _game()
 	var engine: RefCounted = game["engine"]
-	_play(game, ["cat nota.txt", "ls -a", "cat .hidden", "cat /etc/passwd", "cat /etc/shadow", "responder 2"])
+	_play(game, M1_STEPS)
 	assert_eq(engine.mission_index, 1, "misión 1 completada")
-	_play(game, ["ping -c 2 web01", "nmap -sn 10.0.0.0/24", "cat /etc/hosts", "responder 2"])
+	_play(game, M2_STEPS)
 	assert_eq(engine.mission_index, 2, "misión 2 completada")
-	_play(game, ["nmap -sV web01", "responder 3", "responder 2", "nmap -Pn 10.0.0.9"])
+	_play(game, M3_STEPS)
 	assert_eq(engine.mission_index, 3, "misión 3 completada")
-	_play(game, ["curl web01/robots.txt", "curl web01/backup/", "curl web01/backup/config.old", "responder 2"])
+	_play(game, M4_STEPS)
 	assert_true(engine.is_finished(), "laboratorio completado")
-	assert_eq(engine.xp, 16 * 100 + 150, "16 objetivos sin pistas (100 c/u) + el de transferencia (150)")
+	assert_eq(engine.xp, 17 * 100 + 2 * 150, "17 objetivos sin pistas (100 c/u) + 2 de transferencia (150 c/u); la autoevaluación no hace falta")
 	var collected := 0
 	for card: Dictionary in engine.evidence_cards():
 		collected += 1 if card["collected"] else 0
@@ -351,8 +363,8 @@ func test_el_juego_avisa_de_que_hay_una_pregunta_y_como_contestarla() -> void:
 	var game := _game()
 	var session: RefCounted = game["session"]
 	var notices: Array = session.run("cat /etc/shadow").notices
-	assert_true("Tienes una pregunta pendiente: escribe `responder`" in "\n".join(notices), "aviso al desbloquearse la pregunta")
-	var hint: String = session.run("pista 5").stdout
+	assert_true("Autoevaluación opcional disponible: escribe `responder`" in "\n".join(notices), "aviso al desbloquearse la pregunta")
+	var hint: String = session.run("pista 7").stdout
 	assert_true("Esto es una pregunta, no un comando" in hint, "la pista dice cómo contestar")
 	assert_true("responder <número>" in hint)
 	assert_true("EN CURSO" in session.run("mision").stdout or "[?]" in session.run("mision").stdout)
@@ -393,8 +405,8 @@ func test_las_ordenes_de_juego_aparecen_en_help_marcadas() -> void:
 
 func test_aviso_de_nueva_mision_y_de_nivel() -> void:
 	var game := _game()
-	var notices := _play(game, ["cat nota.txt", "ls -a", "cat .hidden", "cat /etc/passwd", "cat /etc/shadow", "responder 2"])
+	var notices := _play(game, M1_STEPS)
 	var text := "\n".join(notices)
 	assert_true("*** Misión completada: Orientación ***" in text)
 	assert_true("Nueva misión: Quién está ahí" in text)
-	assert_true("Nivel 2 alcanzado." in text, "500 XP superan los 300 del primer nivel")
+	assert_true("Nivel 3 alcanzado." in text, "650 XP: dos niveles de 300")

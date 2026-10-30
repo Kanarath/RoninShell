@@ -10,6 +10,7 @@ const Tokenizer := preload("res://engine/shell/tokenizer.gd")
 const Parser := preload("res://engine/shell/parser.gd")
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
+const CommandDocs := preload("res://engine/commands/command_docs.gd")
 
 const HISTORY_LIMIT := 500
 
@@ -24,6 +25,8 @@ var last_exit_code: int = 0
 ## descubierto, puerto visto...). Las misiones se comprueban sobre estos hechos, no sobre
 ## el comando exacto escrito: cat, grep o head valen igual para "leer un archivo".
 var events: Array[Dictionary] = []
+## Cuaderno de hallazgos del jugador: [{type, text}] con type = indicio, hipotesis, confirmado o falso-positivo.
+var findings: Array[Dictionary] = []
 ## Seguimiento de misiones (opcional): tras cada comando revisa si se cumplió algún objetivo.
 var tracker: RefCounted = null
 
@@ -101,6 +104,12 @@ func _run_command(argv: Array, stdin: String) -> RefCounted:
 	if not registry.has_command(command_name):
 		return CommandResult.error("bash: %s: command not found" % command_name, 127)
 	var args := argv.slice(1)
+	# `--help` funciona en cualquier herramienta; `-h` solo donde en la realidad también es ayuda
+	# (en otras, como ls, -h es una opción distinta y no debemos pisarla). echo lo escribe tal cual.
+	if command_name != "echo" and CommandDocs.has(command_name):
+		if "--help" in args or ("-h" in args and CommandDocs.short_h_is_help(command_name)):
+			record("help_viewed", {"tool": command_name, "via": "help-flag"})
+			return CommandResult.ok(CommandDocs.short_help(command_name))
 	return registry.get_callable(command_name).call(self, args, stdin)
 
 

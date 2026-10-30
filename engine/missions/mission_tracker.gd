@@ -36,8 +36,17 @@ func format_notifications(notifications: Array, level_before: int) -> Array[Stri
 				lines.append("Escribe `mision` para ver tus objetivos.")
 	if engine.level() > level_before:
 		lines.append("Nivel %d alcanzado." % engine.level())
-	if not notifications.is_empty() and not engine.active_question().is_empty():
-		lines.append("Tienes una pregunta pendiente: escribe `responder` para verla (se contesta con `responder <número>`).")
+	# Si lo que acabas de hacer desbloquea una pregunta de autoevaluación, avisa una vez.
+	var completed: Array[String] = []
+	for item: Dictionary in notifications:
+		if item["type"] == "objective":
+			completed.append(item["id"])
+	var question: Dictionary = engine.active_question()
+	if not question.is_empty():
+		for required: String in question.get("requires", []):
+			if required in completed:
+				lines.append("Autoevaluación opcional disponible: escribe `responder` para ver la pregunta (+XP extra, sin presión).")
+				break
 	return lines
 
 
@@ -61,7 +70,7 @@ func mission_text() -> String:
 			suffix = "  (bloqueado: completa antes los objetivos necesarios)"
 		elif objective.has("question"):
 			marker = "[?]"
-			suffix = "  (pregunta: usa `responder`)"
+			suffix = "  (autoevaluación opcional: usa `responder`)" if engine.is_optional(objective) else "  (pregunta: usa `responder`)"
 		elif not active.is_empty() and active["id"] == objective["id"]:
 			marker = "[>]"
 		text += "  %s %d. %s%s\n" % [marker, number, objective["text"], suffix]

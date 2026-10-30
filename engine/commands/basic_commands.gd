@@ -3,6 +3,7 @@ extends RefCounted
 ## Los comandos de archivos (ls, cd, cat...) llegan en el paso 4.
 
 const CommandResult := preload("res://engine/shell/command_result.gd")
+const CommandDocs := preload("res://engine/commands/command_docs.gd")
 
 
 func register_all(registry: RefCounted) -> void:
@@ -42,8 +43,13 @@ func _pwd(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
 	return CommandResult.ok(session.cwd + "\n")
 
 
-func _help(session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
-	var lines: Array[String] = ["Comandos disponibles:"]
+func _help(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	if not args.is_empty():
+		if not CommandDocs.has(args[0]):
+			return CommandResult.error("help: no hay ayuda para '%s'" % args[0])
+		session.record("help_viewed", {"tool": args[0], "via": "help"})
+		return CommandResult.ok(CommandDocs.short_help(args[0]))
+	var lines: Array[String] = ["Comandos disponibles (usa `help <comando>`, `<comando> --help` o `man <comando>`; `cheatsheet` para una chuleta):"]
 	for command_name in session.registry.names():
 		lines.append("  %-10s %s" % [command_name, session.registry.description_of(command_name)])
 	return CommandResult.ok("\n".join(lines) + "\n")
