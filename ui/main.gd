@@ -7,6 +7,7 @@ const CutFrame := preload("res://ui/widgets/cut_frame.gd")
 const SealIcon := preload("res://ui/widgets/seal_icon.gd")
 const NetworkMap := preload("res://ui/widgets/network_map.gd")
 const TerminalView := preload("res://ui/widgets/terminal_view.gd")
+const Mascot := preload("res://ui/widgets/mascot.gd")
 const LabLoader := preload("res://engine/lab_loader.gd")
 const ShellSession := preload("res://engine/shell/shell_session.gd")
 const CommandSet := preload("res://engine/commands/command_set.gd")
@@ -28,6 +29,8 @@ var terminal := TerminalView.new()
 ## Si es false no se lee ni se escribe progreso (tests y capturas con --no-save).
 var persist := true
 
+var mascot := Mascot.new()
+var network_map: Control = null
 var _overlay := ColorRect.new()
 var _store := SaveStore.new()
 var _mission_label := Label.new()
@@ -94,12 +97,30 @@ func _start_session() -> void:
 	banner.append("")
 	terminal.setup(session, banner)
 	terminal.command_executed.connect(_on_command_executed)
+	network_map.session = session
+	network_map.refresh()
 
 
-func _on_command_executed(_line: String, _result: RefCounted) -> void:
+func _on_command_executed(line: String, result: RefCounted) -> void:
+	_react(line, result)
+	network_map.refresh()
 	_refresh_missions()
 	if persist and mission_engine != null:
 		_store.save(mission_engine)
+
+
+## La mascota reacciona: celebra los objetivos, se alarma con un error y piensa si pides ayuda.
+func _react(line: String, result: RefCounted) -> void:
+	var first_word := line.strip_edges().get_slice(" ", 0)
+	var completed := false
+	for notice: String in result.notices:
+		completed = completed or notice.begins_with("[+]") or notice.begins_with("***")
+	if completed:
+		mascot.react("happy", 3.5)
+	elif first_word in ["pista", "man", "help", "cheatsheet"] or " --help" in line:
+		mascot.react("think", 3.0)
+	elif result.exit_code != 0 or result.stderr != "":
+		mascot.react("alert", 2.5)
 
 
 ## Redibuja los paneles que dependen del progreso: misión, objetivos, XP y evidencias.
@@ -129,22 +150,16 @@ func _rebuild_objectives() -> void:
 	for objective: Dictionary in mission_engine.objectives():
 		if mission_engine.is_optional(objective):
 			continue  # la autoevaluación opcional no ocupa sitio: se avisa con una línea aparte
+		# El sello ya cuenta el estado; solo el objetivo actual lleva una etiqueta de texto.
 		var state := SealIcon.State.PENDING
-		var tag := "PENDIENTE"
-		var tag_color: Color = Palette.GOLD_DIM
+		var tag := ""
 		if mission_engine.status_of(objective["id"]) == "done":
 			state = SealIcon.State.DONE
-			tag = "COMPLETADO"
-			tag_color = Palette.GOLD
 		elif not mission_engine.is_available(objective):
-			tag = "BLOQUEADO"
+			state = SealIcon.State.LOCKED
 		elif not active.is_empty() and active["id"] == objective["id"]:
 			state = SealIcon.State.ACTIVE
 			tag = "PREGUNTA: escribe  responder" if objective.has("question") else "EN CURSO"
-			tag_color = Palette.TEAL
-		elif objective.has("question"):
-			tag = "PREGUNTA"
-			tag_color = Palette.TEAL_DIM
 
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
@@ -155,10 +170,12 @@ func _rebuild_objectives() -> void:
 		var texts := VBoxContainer.new()
 		texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		texts.add_theme_constant_override("separation", 0)
-		var title := _colored_label(objective.get("short", objective["text"]), Palette.TEXT_DIM if state == SealIcon.State.DONE else Palette.TEXT, 13)
+		var title_color: Color = Palette.TEXT_DIM if state in [SealIcon.State.DONE, SealIcon.State.LOCKED] else Palette.TEXT
+		var title := _colored_label(objective.get("short", objective["text"]), title_color, 13)
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		texts.add_child(title)
-		texts.add_child(_colored_label("[%s]" % tag, tag_color, 10))
+		if tag != "":
+			texts.add_child(_colored_label("[%s]" % tag, Palette.TEAL, 10))
 		row.add_child(texts)
 		content.add_child(row)
 
@@ -236,13 +253,20 @@ func _build_layout() -> void:
 
 func _build_top_bar() -> Control:
 	var bar := HBoxContainer.new()
-	bar.custom_minimum_size = Vector2(0, 62)
+	bar.custom_minimum_size = Vector2(0, 70)
 
+	var left := HBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 12)
+	bar.add_child(left)
+	mascot.name = "Mascot"
+	mascot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	left.add_child(mascot)
 	_mission_label.name = "MissionLabel"
 	_mission_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_mission_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_mission_label.add_theme_color_override("font_color", Palette.TEXT_DIM)
-	bar.add_child(_mission_label)
+	left.add_child(_mission_label)
 
 	var brand := VBoxContainer.new()
 	brand.add_theme_constant_override("separation", 4)
@@ -338,11 +362,11 @@ func _build_map_panel() -> Control:
 	frame.name = "Map"
 	frame.title = "Mapa de red"
 	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var map := NetworkMap.new()
-	map.name = "NetworkMap"
-	map.world = world
-	map.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	frame.content.add_child(map)
+	network_map = NetworkMap.new()
+	network_map.name = "NetworkMap"
+	network_map.world = world
+	network_map.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame.content.add_child(network_map)
 	return frame
 
 

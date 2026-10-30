@@ -12,3 +12,6 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Salida de pxl (previews y PNG intermedios)
+art/out/
