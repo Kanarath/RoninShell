@@ -1,0 +1,247 @@
+{
+	"id": "tienda_web",
+	"title": "Tienda web",
+	"lab": "tienda_web",
+	"missions": [
+		{
+			"id": "w1_alcance_cabeceras",
+			"title": "Alcance y cabeceras",
+			"briefing": "Nueva auditoría, esta vez de una aplicación web. Antes de tocar nada, lee qué te autoriza el cliente: solo se audita lo que está en el alcance. Después mira qué cuenta la web sobre sí misma y qué defensas le faltan. `man cabeceras` te explica qué buscar.",
+			"objectives": [
+				{
+					"id": "w1_alcance",
+					"text": "Lee la nota del cliente para saber qué está autorizado",
+					"short": "Lee el alcance autorizado",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"evidence": {"id": "evw_alcance", "title": "Alcance", "detail": "Solo shop01 (10.0.2.10), puerto 80, con cuenta de pruebas"},
+					"hints": [
+						"En una auditoría real, lo primero es saber qué te han autorizado a hacer y sobre qué sistemas.",
+						"Hay una nota del cliente en tu directorio personal. Mira qué contiene `ls`.",
+						"Léela con `cat cliente.txt`: indica el alcance (solo shop01, puerto 80) y la cuenta de pruebas que puedes usar."
+					]
+				},
+				{
+					"id": "w2_servicio",
+					"text": "Identifica el producto y la versión del servidor web de shop01",
+					"short": "Versión del servidor web",
+					"concept": "versiones",
+					"requires": ["w1_alcance"],
+					"check": {"event": "service_version", "where": {"ip": "10.0.2.10", "port": 80}},
+					"evidence": {"id": "evw_servidor", "title": "Servidor web", "detail": "nginx 1.18.0 en el puerto 80"},
+					"hints": [
+						"Ya sabes cómo averiguar qué programa atiende un puerto abierto.",
+						"Nmap tiene una opción para detectar servicio y versión: `nmap --help` la muestra.",
+						"`nmap -sV shop01` muestra nginx 1.18.0 en el 80."
+					]
+				},
+				{
+					"id": "w3_cabeceras",
+					"text": "Pide las cabeceras de la portada de shop01 y revisa qué cuentan y qué defensas faltan",
+					"short": "Revisa las cabeceras de la portada",
+					"concept": "cabeceras_http",
+					"requires": ["w2_servicio"],
+					"check": {"event": "headers_seen", "where": {"ip": "10.0.2.10", "path": "/"}},
+					"evidence": {"id": "evw_cabeceras", "title": "Cabeceras", "detail": "Filtra nginx 1.18.0 y PHP 7.2.34; sin CSP, X-Frame-Options ni HSTS"},
+					"hints": [
+						"Las respuestas HTTP llevan cabeceras con información: algunas ayudan a la seguridad y otras cuentan demasiado.",
+						"Con curl puedes pedir solo las cabeceras (mira `curl --help`).",
+						"`curl -I shop01` muestra las cabeceras: fíjate en Server y X-Powered-By (cuentan versiones) y en que no aparecen Content-Security-Policy, X-Frame-Options ni Strict-Transport-Security."
+					]
+				},
+				{
+					"id": "w4_clasif_cabeceras",
+					"text": "Registra en tu cuaderno la falta de cabeceras de seguridad con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica la falta de cabeceras",
+					"concept": "analisis_hallazgos",
+					"requires": ["w3_cabeceras"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["cabecera"]}},
+					"classify": {
+						"keywords": ["cabecera"],
+						"accepted": ["confirmado"],
+						"ok": "Correcto: lo has visto tú directamente en la respuesta, así que es un hecho confirmado. Recuerda valorar su gravedad real: es una defensa en profundidad que falta, no una intrusión.",
+						"feedback": {
+							"indicio": "Aquí ya no es un indicio: la ausencia de las cabeceras la has observado tú en la respuesta, y cualquiera puede repetirlo con curl -I.",
+							"hipotesis": "No es una hipótesis: no hay nada que suponer. Las cabeceras están o no están en la respuesta, y las has visto.",
+							"falso-positivo": "No lo es: las cabeceras de seguridad realmente faltan. Otra cosa es cuánto importa, que se valora aparte."
+						}
+					},
+					"hints": [
+						"Piensa si esto es algo que supones o algo que has visto tú en la respuesta.",
+						"Un hallazgo es 'confirmado' cuando tienes una prueba que cualquiera puede repetir.",
+						"Por ejemplo `hallazgo confirmado \"Faltan cabeceras de seguridad (CSP, X-Frame-Options, HSTS) en shop01\"`."
+					]
+				}
+			]
+		},
+		{
+			"id": "w2_sesiones",
+			"title": "Sesiones y cookies",
+			"briefing": "La tienda tiene cuentas de usuario. Con la cuenta de pruebas del cliente, comprueba cómo mantiene la sesión y si protege bien la cookie. `man cookies` explica las banderas que importan.",
+			"objectives": [
+				{
+					"id": "w5_login",
+					"text": "Inicia sesión en shop01 con la cuenta de pruebas del cliente (envía el formulario de /login)",
+					"short": "Inicia sesión con la cuenta de pruebas",
+					"concept": "cookies_sesiones",
+					"check": {"event": "http_response", "where": {"ip": "10.0.2.10", "path": "/login", "method": "POST", "status": 302}},
+					"hints": [
+						"Un formulario de inicio de sesión se envía con una petición POST que lleva usuario y clave.",
+						"curl envía datos de formulario con la opción de datos (mira `curl --help`); las credenciales están en la nota del cliente.",
+						"`curl -i -d 'usuario=demo&clave=demo123' shop01/login` responde con una redirección (302) y entrega cookies."
+					]
+				},
+				{
+					"id": "w6_cookies",
+					"text": "Observa las cookies que entrega el login y mira sus banderas (usa -i para ver las cabeceras)",
+					"short": "Mira las cookies y sus banderas",
+					"concept": "cookies_sesiones",
+					"requires": ["w5_login"],
+					"check": {"all": [
+						{"event": "cookie_set", "where": {"name": "session"}},
+						{"event": "headers_seen", "where": {"ip": "10.0.2.10", "path": "/login"}}
+					]},
+					"evidence": {"id": "evw_cookie", "title": "Cookie de sesión", "detail": "session sin HttpOnly ni Secure"},
+					"hints": [
+						"Las cookies llegan en cabeceras Set-Cookie: hay que pedir las cabeceras para verlas.",
+						"Repite el login mostrando las cabeceras de la respuesta.",
+						"`curl -i -d 'usuario=demo&clave=demo123' shop01/login`: busca las líneas Set-Cookie. La cookie `session` no lleva HttpOnly ni Secure."
+					]
+				},
+				{
+					"id": "w7_clasif_cookie",
+					"text": "Registra en tu cuaderno la falta de banderas de seguridad en la cookie de sesión con su clasificación (`hallazgo`)",
+					"short": "Clasifica la cookie sin banderas",
+					"concept": "analisis_hallazgos",
+					"requires": ["w6_cookies"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["cookie"]}},
+					"classify": {
+						"keywords": ["cookie"],
+						"accepted": ["confirmado"],
+						"ok": "Correcto: las banderas que faltan las has visto en la propia respuesta, así que es un hecho confirmado. Su impacto real depende de si hay otros fallos que lo aprovechen.",
+						"feedback": {
+							"indicio": "Ya no es un indicio: has visto la cabecera Set-Cookie completa y sabes qué banderas lleva y cuáles no.",
+							"hipotesis": "No hay hipótesis que comprobar: la cookie está delante de ti y se puede repetir el login para verla otra vez.",
+							"falso-positivo": "No lo es: la cookie realmente no lleva esas banderas."
+						}
+					},
+					"hints": [
+						"¿Lo supones o lo has visto en la respuesta del servidor?",
+						"Un hallazgo es 'confirmado' cuando se puede repetir la prueba y da el mismo resultado.",
+						"Por ejemplo `hallazgo confirmado \"La cookie de sesión no lleva HttpOnly ni Secure\"`."
+					]
+				},
+				{
+					"id": "w8_perfil",
+					"text": "Reutiliza la sesión para pedir tu perfil (/perfil) enviando la cookie que te dieron",
+					"short": "Reutiliza la sesión en /perfil",
+					"concept": "cookies_sesiones",
+					"requires": ["w6_cookies"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.2.10", "path": "/perfil", "status": 200, "with_cookie": true}},
+					"evidence": {"id": "evw_perfil", "title": "Sesión reutilizada", "detail": "Con la cookie session se accede a /perfil"},
+					"hints": [
+						"El servidor sabe quién eres porque tu navegador devuelve la cookie en cada petición. curl puede hacer lo mismo.",
+						"Hay una opción para enviar cookies (texto o un archivo guardado con otra opción): mira `curl --help`.",
+						"`curl -b 'session=tok-demo-3f9a1c' shop01/perfil` (el valor lo viste en Set-Cookie), o guarda la cookie con `-c` y reutilízala con `-b`."
+					]
+				}
+			]
+		},
+		{
+			"id": "w3_acceso",
+			"title": "Control de acceso",
+			"briefing": "Estar identificado no es lo mismo que estar autorizado. Con la cuenta de pruebas, comprueba si la tienda decide bien qué puedes ver. Todos los datos son de prueba. `man control_acceso` explica qué buscar y cómo se corrige.",
+			"objectives": [
+				{
+					"id": "w9_pedido_propio",
+					"text": "Pide tu pedido de prueba (el 15) con tu sesión",
+					"short": "Pide tu pedido (el 15)",
+					"concept": "control_acceso",
+					"check": {"event": "http_response", "where": {"ip": "10.0.2.10", "path": "/pedido", "status": 200, "with_cookie": true}, "contains": {"query": ["id=15"]}},
+					"hints": [
+						"Las páginas de pedidos reciben un número en la dirección: es el identificador del pedido.",
+						"Pide /pedido indicando id=15 y envía tu cookie de sesión.",
+						"`curl -b 'session=tok-demo-3f9a1c' 'shop01/pedido?id=15'` (ponlo entre comillas por el signo ?)."
+					]
+				},
+				{
+					"id": "w10_pedido_ajeno",
+					"text": "Comprueba si tu cuenta puede ver el pedido 16, que pertenece a otro cliente de prueba",
+					"short": "¿Se ve un pedido que no es tuyo?",
+					"concept": "control_acceso",
+					"requires": ["w9_pedido_propio"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.2.10", "path": "/pedido", "status": 200, "with_cookie": true}, "contains": {"query": ["id=16"]}},
+					"evidence": {"id": "evw_pedido", "title": "Pedido ajeno visible", "detail": "Con la sesión de demo se ve el pedido 16, de otra cuenta"},
+					"hints": [
+						"Un servidor bien hecho comprueba que cada recurso pertenece a quien lo pide, no solo que esté identificado.",
+						"Con tu sesión, pide otro identificador distinto del tuyo y mira si responde o lo rechaza.",
+						"`curl -b 'session=tok-demo-3f9a1c' 'shop01/pedido?id=16'`: si devuelve un pedido de otra persona, falta la comprobación de propietario."
+					]
+				},
+				{
+					"id": "w11_admin",
+					"text": "Comprueba si el acceso a /admin depende de un dato que controlas tú (por ejemplo, una cookie)",
+					"short": "¿/admin se decide con datos del cliente?",
+					"concept": "control_acceso",
+					"requires": ["w6_cookies"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.2.10", "path": "/admin", "status": 200}},
+					"evidence": {"id": "evw_admin", "title": "Admin decidido por el cliente", "detail": "El rol viaja en una cookie que controla el usuario"},
+					"hints": [
+						"Los permisos deberían decidirse con datos que guarda el servidor, no con algo que viaja en tus peticiones y tú puedes cambiar.",
+						"Mira qué cookies te dio el login: una de ellas parece describir un rol. Prueba /admin tal cual y luego con ese dato cambiado.",
+						"`curl -i shop01/admin` (403) y después `curl -b 'rol=admin' shop01/admin`: si cambia el resultado, el servidor se fía de un dato del cliente."
+					]
+				},
+				{
+					"id": "w12_clasif_acceso",
+					"text": "Registra en tu cuaderno el fallo del pedido ajeno con la clasificación que le corresponde (`hallazgo`)",
+					"short": "Clasifica el fallo de acceso",
+					"concept": "analisis_hallazgos",
+					"requires": ["w10_pedido_ajeno"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["pedido"]}},
+					"classify": {
+						"keywords": ["pedido"],
+						"accepted": ["confirmado"],
+						"ok": "Correcto: lo has comprobado con una petición repetible (pedido 16 visible con la sesión de otra cuenta), así que está confirmado.",
+						"feedback": {
+							"indicio": "Ya pasaste de la sospecha: pediste el pedido 16 y el servidor te lo entregó. Es una prueba repetible.",
+							"hipotesis": "No es una hipótesis: la has comprobado tú con una petición concreta.",
+							"falso-positivo": "No lo es: el servidor devolvió datos de otra cuenta."
+						}
+					},
+					"hints": [
+						"¿Sospechas que ocurre, o lo has visto ocurrir con una petición concreta?",
+						"Un hallazgo es 'confirmado' cuando tienes una prueba que cualquiera puede repetir.",
+						"Por ejemplo `hallazgo confirmado \"Pedido ajeno visible: /pedido?id=16 con la sesión de demo\"`."
+					]
+				},
+				{
+					"id": "w13_informe",
+					"text": "Redacta el hallazgo de control de acceso en informe/borrador.md y supera la revisión (`revisar`)",
+					"short": "Redacta el informe y revísalo",
+					"concept": "informe",
+					"requires": ["w12_clasif_acceso"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 100,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué es: describe el fallo", "any": ["control de acceso", "pedido", "autoriz", "propietario"]},
+							{"id": "donde", "label": "Dónde: ruta o sistema afectado", "any": ["/pedido", "shop01", "10.0.2.10"]},
+							{"id": "evidencia", "label": "Evidencia: cómo se demuestra", "any": ["id=16", "get ", "200", "curl", "petición"]},
+							{"id": "impacto", "label": "Impacto: qué permite", "any": ["otros clientes", "otro cliente", "otro usuario", "privacidad", "datos de"]},
+							{"id": "recomendacion", "label": "Recomendación: qué hacer", "any": ["comprobar", "verificar", "propietario", "en el servidor", "autorización"]}
+						]
+					},
+					"evidence": {"id": "evw_informe", "title": "Informe web", "detail": "borrador.md supera la revisión"},
+					"hints": [
+						"Un buen hallazgo responde a cinco preguntas: qué es, dónde está, cómo se demuestra, qué impacto tiene y qué se recomienda.",
+						"Escribe con `echo \"...\" >> informe/borrador.md` y usa `revisar` para ver qué falta. No afirmes más de lo que probaste.",
+						"Ejemplo: echo \"Fallo de control de acceso en shop01: /pedido?id=16 devuelve el pedido de otro cliente con la sesión de la cuenta de pruebas (GET responde 200). Impacto: se pueden ver datos de otros usuarios. Recomendación: comprobar en el servidor que el pedido pertenece al usuario autenticado.\" >> informe/borrador.md y después `revisar`."
+					]
+				}
+			]
+		}
+	]
+}
