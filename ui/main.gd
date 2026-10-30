@@ -1,27 +1,27 @@
 extends Control
 ## Pantalla principal (maqueta jugable del diseño "ronin neón").
-## La interfaz solo muestra; el estado sale del motor (engine/). Todo el contenido
-## de terminal y misión de aquí es provisional hasta los pasos de intérprete y misiones.
+## La interfaz solo muestra; el estado sale del motor (engine/). Los objetivos y el
+## expediente son provisionales hasta el paso de misiones.
 
 const Palette := preload("res://ui/theme/palette.gd")
 const CutFrame := preload("res://ui/widgets/cut_frame.gd")
 const SealIcon := preload("res://ui/widgets/seal_icon.gd")
 const NetworkMap := preload("res://ui/widgets/network_map.gd")
+const TerminalView := preload("res://ui/widgets/terminal_view.gd")
 const LabLoader := preload("res://engine/lab_loader.gd")
+const ShellSession := preload("res://engine/shell/shell_session.gd")
+const CommandSet := preload("res://engine/commands/command_set.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
 
 var world: RefCounted = null
-var _terminal := RichTextLabel.new()
-var _terminal_lines: Array[String] = []
-var _cursor_on := true
+var session: RefCounted = null
+var terminal := TerminalView.new()
 var _overlay := ColorRect.new()
-var _mono := SystemFont.new()
 
 
 func _ready() -> void:
-	_mono.font_names = PackedStringArray(["Cascadia Mono", "Consolas", "Courier New"])
 	var result := LabLoader.load_file(LAB_PATH)
 	if result["world"] == null:
 		push_error("No se pudo cargar el laboratorio: %s" % str(result["errors"]))
@@ -30,12 +30,19 @@ func _ready() -> void:
 	_build_background()
 	_build_layout()
 	_build_overlay()
-	_fill_terminal()
-	_start_cursor_blink()
+	_start_session()
 
+	var demo_commands: Array = []
+	var screenshot_path := ""
 	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--screenshot="):
-			_capture_and_quit(arg.trim_prefix("--screenshot="))
+		if arg.begins_with("--run="):
+			demo_commands = arg.trim_prefix("--run=").split("~~")
+		elif arg.begins_with("--screenshot="):
+			screenshot_path = arg.trim_prefix("--screenshot=")
+	for command: String in demo_commands:
+		terminal.submit(command)
+	if screenshot_path != "":
+		_capture_and_quit(screenshot_path)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -180,16 +187,8 @@ func _build_terminal_panel() -> Control:
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.size_flags_stretch_ratio = 3.0
 
-	_terminal.bbcode_enabled = true
-	_terminal.scroll_following = true
-	_terminal.selection_enabled = true
-	_terminal.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_terminal.add_theme_font_override("normal_font", _mono)
-	_terminal.add_theme_font_override("bold_font", _mono)
-	_terminal.add_theme_font_size_override("normal_font_size", 17)
-	_terminal.add_theme_font_size_override("bold_font_size", 17)
-	_terminal.add_theme_color_override("default_color", Palette.TEXT)
-	frame.content.add_child(_terminal)
+	terminal.name = "TerminalView"
+	frame.content.add_child(terminal)
 	return frame
 
 
@@ -282,44 +281,18 @@ func _build_overlay() -> void:
 	add_child(_overlay)
 
 
-# --- Contenido provisional de la terminal ----------------------------------
+# --- Sesión de shell ----------------------------------------------------------
 
-func _fill_terminal() -> void:
-	_terminal_lines.clear()
+func _start_session() -> void:
 	if world == null:
-		_terminal_lines.append("[color=#e0674f]No se pudo cargar el laboratorio.[/color]")
-		_refresh_terminal()
+		terminal.print_text("No se pudo cargar el laboratorio.", Palette.DANGER)
 		return
-	var target = world.host_by_name("web01")
-	_terminal_lines.append("[color=#d9a441]>[/color] nmap -sV %s" % target.ip)
-	_terminal_lines.append("")
-	_terminal_lines.append("Nmap scan report for %s (%s)" % [target.hostname, target.ip])
-	_terminal_lines.append("PORT      STATE     SERVICE     VERSION")
-	for service in target.services:
-		_terminal_lines.append("%-9s %-9s %-11s %s %s" % [
-			"%d/%s" % [service.port, service.proto], service.state, service.name,
-			service.product, service.version,
-		])
-	_terminal_lines.append("")
-	_terminal_lines.append("[color=#6fb3a5]Maqueta: esta salida se genera ya desde el estado del laboratorio, pero aún no hay intérprete (paso 3).[/color]")
-	_terminal_lines.append("")
-	_refresh_terminal()
-
-
-func _refresh_terminal() -> void:
-	var cursor := "█" if _cursor_on else " "
-	var prompt := "[color=#d9a441]ronin@ronin-box[/color]:~$ %s" % cursor
-	_terminal.text = "\n".join(_terminal_lines) + prompt
-
-
-func _start_cursor_blink() -> void:
-	var timer := Timer.new()
-	timer.wait_time = 0.55
-	timer.autostart = true
-	timer.timeout.connect(func() -> void:
-		_cursor_on = not _cursor_on
-		_refresh_terminal())
-	add_child(timer)
+	session = ShellSession.new(world, CommandSet.create_registry())
+	terminal.setup(session, [
+		"RoninShell  -  laboratorio \"%s\"" % world.title,
+		"Red autorizada: %s. Escribe 'help' para ver los comandos y usa Tab para completar." % world.cidr,
+		"",
+	])
 
 
 # --- Utilidades -------------------------------------------------------------

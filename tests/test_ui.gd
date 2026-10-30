@@ -34,9 +34,9 @@ func test_pantalla_principal_se_construye() -> void:
 		assert_true(root.find_child(panel_name, true, false) != null, "falta el panel %s" % panel_name)
 	assert_true(root.world != null, "debe cargar el laboratorio")
 
-	var terminal_text: String = root._terminal.text
-	assert_true("web01" in terminal_text, "la terminal muestra datos del laboratorio")
-	assert_true("Apache httpd 2.4.49" in terminal_text, "la salida sale del estado, no inventada")
+	assert_true(root.session != null, "debe crear la sesión de shell")
+	assert_true(root.terminal.output_text().contains("Primer contacto"), "la terminal muestra el laboratorio cargado")
+	assert_eq(root.terminal.prompt_label.text, "ronin@ronin-box:~$ ")
 
 	tree.root.remove_child(root)
 	root.free()
