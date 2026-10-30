@@ -75,8 +75,10 @@ func _read_inputs(session: RefCounted, command: String, files: Array, stdin: Str
 			_fail(result, "%s: %s: Is a directory" % [command, file_arg])
 		elif not fs.check_access(path, session.user, "r"):
 			_fail(result, "%s: %s: Permission denied" % [command, file_arg])
+			session.record("permission_denied", {"path": path, "action": "read"})
 		else:
 			inputs.append({"name": file_arg, "text": fs.read_file(path)})
+			session.record("file_read", {"path": path})
 	return inputs
 
 
@@ -93,8 +95,10 @@ func _cd(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	if not fs.is_dir(target):
 		return CommandResult.error("bash: cd: %s: Not a directory" % shown)
 	if not fs.check_access(target, session.user, "x"):
+		session.record("permission_denied", {"path": target, "action": "enter"})
 		return CommandResult.error("bash: cd: %s: Permission denied" % shown)
 	session.cwd = target
+	session.record("dir_changed", {"path": target})
 	return CommandResult.ok()
 
 
@@ -131,7 +135,9 @@ func _ls(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		var dir_path := _abs(session, target)
 		if not fs.check_access(dir_path, session.user, "r"):
 			_fail(result, "ls: cannot open directory '%s': Permission denied" % target, 2)
+			session.record("permission_denied", {"path": dir_path, "action": "list"})
 			continue
+		session.record("dir_listed", {"path": dir_path})
 		var names: Array = []
 		if show_dots:
 			names.append(".")
@@ -361,8 +367,10 @@ func _grep(session: RefCounted, args: Array, stdin: String) -> RefCounted:
 				_fail(result, "grep: %s: Is a directory" % file_arg, 2)
 		elif not fs.check_access(path, session.user, "r"):
 			_fail(result, "grep: %s: Permission denied" % file_arg, 2)
+			session.record("permission_denied", {"path": path, "action": "read"})
 		else:
 			sources.append({"label": file_arg, "text": fs.read_file(path)})
+			session.record("file_read", {"path": path})
 
 	var show_name: bool = sources.size() > 1 or flags.has("r")
 	var any_match := false
@@ -402,8 +410,10 @@ func _collect_files(session: RefCounted, dir_path: String, shown: String, source
 			_collect_files(session, child, child_shown, sources, result)
 		elif fs.check_access(child, session.user, "r"):
 			sources.append({"label": child_shown, "text": fs.read_file(child)})
+			session.record("file_read", {"path": child})
 		else:
 			_fail(result, "grep: %s: Permission denied" % child_shown, 2)
+			session.record("permission_denied", {"path": child, "action": "read"})
 
 
 func _find(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
@@ -498,6 +508,7 @@ func _chmod(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		if new_mode == "":
 			return CommandResult.error("chmod: invalid mode: ‘%s’" % spec)
 		fs.set_mode(path, new_mode)
+		session.record("mode_changed", {"path": path, "mode": new_mode})
 	return result
 
 

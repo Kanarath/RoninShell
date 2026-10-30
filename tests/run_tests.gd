@@ -13,6 +13,8 @@ const TESTS_DIR := "res://tests"
 ## Los tests se ejecutan en el primer fotograma (y no en _init): hasta entonces el
 ## árbol de escenas no está activo y los nodos añadidos al root no reciben _ready.
 func _initialize() -> void:
+	# Los tests nunca leen ni escriben tu progreso real.
+	Engine.set_meta("roninshell_no_save", true)
 	process_frame.connect(_run_all, CONNECT_ONE_SHOT)
 
 

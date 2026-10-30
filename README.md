@@ -6,11 +6,19 @@ Aprendes Linux, Bash y pentesting **investigando** en un laboratorio controlado:
 
 ## Estado
 
-Completado: esqueleto con tests en consola, estado del mundo cargado desde `data/labs/*.json`, maqueta de la interfaz "ronin neón" e intérprete de comandos (comillas, escapes, tuberías, redirecciones, errores estilo bash). Siguiente: comandos de archivos (`ls`, `cd`, `cat`...) y conectar el intérprete a la terminal visual. El diseño está en [`docs/GDD.md`](docs/GDD.md).
+Jugable: un laboratorio ("Primer contacto") con 4 misiones y 17 objetivos, de la orientación en Linux hasta un mini informe.
+
+Qué hay hecho:
+- **Motor de laboratorio** (`engine/`): estado del mundo cargado desde datos, intérprete de comandos (comillas, tuberías, redirecciones, errores estilo bash), permisos Unix reales y comandos `ls cd cat head tail wc sort uniq grep find chmod whoami id` más `ping`, `nmap` y `curl` simulados desde el mismo estado.
+- **Misiones** (`engine/missions/`, `data/missions/`): objetivos que se comprueban sobre lo observado (no sobre el comando exacto), preguntas de interpretación, pistas en 3-4 niveles, XP por nivel de ayuda, evidencias y perfil de competencias. Órdenes de juego: `mision`, `pista`, `responder`, `expediente`, `perfil`.
+- **Interfaz** (`ui/`): terminal interactiva (escribir directo, historial con flechas, Tab, Ctrl+L), paneles de misión, mapa de red y expediente, con VFX mínimo.
+- **Progreso** guardado en tu equipo (`user://`).
+
+Siguiente: modo libre, repaso espaciado, más laboratorios y pentesting web. El diseño está en [`docs/GDD.md`](docs/GDD.md).
 
 ## Probar el juego
 
-Abre la carpeta con Godot 4.7 y pulsa F5. `F2` enciende o apaga el VFX (líneas de escaneo y viñeta). La interfaz actual es una maqueta del diseño "ronin neón" (referencia en `docs/reference/`); aún no hay intérprete de comandos.
+Abre la carpeta con Godot 4.7 y pulsa F5. Escribe directamente (no hace falta pulsar Enter antes). Empieza con `mision` y `help`. `F2` enciende o apaga el VFX. El diseño visual de referencia está en `docs/reference/`. Para empezar de cero, borra el archivo de progreso de la carpeta de datos de la app.
 
 ## Ejecutar los tests
 

@@ -72,6 +72,8 @@ func _ping(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 			var ms := Network.latency_ms(ip, seq)
 			times.append(ms)
 			out += "64 bytes from %s: icmp_seq=%d ttl=64 time=%.2f ms\n" % [source, seq, ms]
+		session.record("ping_reply", {"ip": ip})
+		session.record("host_discovered", {"ip": ip, "via": "ping"})
 		out += "\n--- %s ping statistics ---\n" % target
 		out += "%d packets transmitted, %d received, 0%% packet loss, time %dms\n" % [count, count, (count - 1) * 1000 + count]
 		out += "rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n" % _rtt_stats(times)
@@ -163,6 +165,7 @@ func _nmap(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		if options["ping_only"]:
 			if discoverable:
 				hosts_up += 1
+				session.record("host_discovered", {"ip": entry["ip"], "via": "nmap"})
 				reports.append("Nmap scan report for %s\nHost is up (%.5fs latency).\n" % [_label(entry), Network.latency_ms(entry["ip"]) / 1000.0])
 			continue
 		if not discoverable and not options["no_ping"]:
@@ -174,6 +177,12 @@ func _nmap(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		scanned_hosts += 1
 		var report := _scan_report(entry, ports, options["version"])
 		reports.append(report["text"])
+		if discoverable:
+			session.record("host_discovered", {"ip": entry["ip"], "via": "nmap"})
+		for row: Dictionary in report["rows"]:
+			session.record("port_found", {"ip": entry["ip"], "port": row["port"], "state": row["state"], "service": row["service"]})
+			if options["version"] and row["detail"] != "":
+				session.record("service_version", {"ip": entry["ip"], "port": row["port"], "detail": row["detail"]})
 		detection_used = detection_used or (options["version"] and report["open"] > 0)
 
 	if options["ping_only"]:
@@ -378,11 +387,11 @@ func _scan_report(entry: Dictionary, ports: Array[int], version_scan: bool) -> D
 	if shown_rows.is_empty():
 		text += "All %d scanned ports on %s are in ignored states.\n" % [ports.size(), label]
 		text += "Not shown: %d %s tcp ports (%s)\n" % [collapsed_count, collapsed_state, reason]
-		return {"text": text, "open": 0}
+		return {"text": text, "open": 0, "rows": []}
 	if collapsed_count > 0:
 		text += "Not shown: %d %s tcp ports (%s)\n" % [collapsed_count, collapsed_state, reason]
 	text += _port_table(shown_rows, version_scan)
-	return {"text": text, "open": open_count}
+	return {"text": text, "open": open_count, "rows": shown_rows}
 
 
 func _port_table(rows: Array, version_scan: bool) -> String:
@@ -432,6 +441,7 @@ func _curl(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 			result.exit_code = fetched["code"]
 			return result
 		last_response = fetched
+		session.record("http_response", {"ip": fetched["ip"], "port": fetched["port"], "path": fetched["path"], "status": fetched["status"]})
 		if flags.has("i") or flags.has("I"):
 			result.stdout += _header_block(fetched)
 		var is_redirect: bool = fetched["status"] in [301, 302, 303, 307, 308] and fetched["headers"].has("Location")
@@ -517,6 +527,7 @@ func _fetch(session: RefCounted, url: String, verbose: bool) -> Dictionary:
 	var response := {
 		"error": "", "code": 0, "status": status, "headers": headers, "body": body,
 		"server": site["server"], "host": host_text, "port": port, "scheme": scheme, "verbose": failure["verbose"],
+		"ip": ip, "path": path,
 	}
 	if verbose:
 		response["verbose"] += "> GET %s HTTP/1.1\n> Host: %s\n> User-Agent: curl/8.5.0\n> Accept: */*\n>\n" % [path_and_query, host_text]

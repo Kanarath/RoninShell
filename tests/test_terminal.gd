@@ -132,6 +132,61 @@ func test_la_terminal_emite_una_senal_por_comando() -> void:
 	_dispose(view)
 
 
+func _key(unicode: int, keycode: int, ctrl := false) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.pressed = true
+	event.unicode = unicode
+	event.keycode = keycode
+	event.ctrl_pressed = ctrl
+	return event
+
+
+## Simula una tecla pulsada cuando el foco NO está en el campo (el caso que había que arreglar).
+func _press(view: Control, event: InputEventKey) -> void:
+	view.input.release_focus()
+	view._unhandled_key_input(event)
+
+
+func test_el_campo_sigue_en_modo_edicion_tras_enter() -> void:
+	var view := _terminal()
+	assert_true(view.input.keep_editing_on_text_submit, "sin esto habría que pulsar Enter antes de cada comando")
+	_dispose(view)
+
+
+func test_escribir_una_letra_sin_foco_la_envia_a_la_linea_de_comandos() -> void:
+	var view := _terminal()
+	assert_false(view.input.has_focus(), "partimos sin foco en el campo")
+	_press(view, _key("l".unicode_at(0), KEY_L))
+	_press(view, _key("s".unicode_at(0), KEY_S))
+	assert_eq(view.input.text, "ls", "las teclas llegan solas al prompt")
+	_dispose(view)
+
+
+func test_enter_backspace_y_tab_funcionan_sin_foco() -> void:
+	var view := _terminal()
+	for letter in "pwdx":
+		_press(view, _key(letter.unicode_at(0), KEY_A))
+	_press(view, _key(0, KEY_BACKSPACE))
+	assert_eq(view.input.text, "pwd")
+	_press(view, _key(0, KEY_ENTER))
+	assert_eq(view.input.text, "", "Enter ejecuta y limpia la línea")
+	assert_true("/home/ronin" in view.output_text(), "se ejecutó pwd")
+	for letter in "cat no":
+		_press(view, _key(letter.unicode_at(0), KEY_A))
+	_press(view, _key(0, KEY_TAB))
+	assert_eq(view.input.text, "cat nota.txt ")
+	_dispose(view)
+
+
+func test_las_combinaciones_con_ctrl_no_se_escriben_como_texto() -> void:
+	var view := _terminal()
+	_press(view, _key("c".unicode_at(0), KEY_C, true))
+	assert_eq(view.input.text, "")
+	_press(view, _key(0, KEY_F2))
+	assert_eq(view.input.text, "", "las teclas de función no escriben nada")
+	_dispose(view)
+
+
 func test_flechas_e_input_de_la_terminal() -> void:
 	var view := _terminal()
 	view.submit("pwd")

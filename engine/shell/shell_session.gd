@@ -20,6 +20,19 @@ var user: Dictionary = {"name": "root", "uid": 0, "home": "/", "groups": ["root"
 var cwd: String = "/"
 var history: Array[String] = []
 var last_exit_code: int = 0
+## Registro de lo que el jugador ha OBSERVADO en el laboratorio (archivo leído, host
+## descubierto, puerto visto...). Las misiones se comprueban sobre estos hechos, no sobre
+## el comando exacto escrito: cat, grep o head valen igual para "leer un archivo".
+var events: Array[Dictionary] = []
+## Seguimiento de misiones (opcional): tras cada comando revisa si se cumplió algún objetivo.
+var tracker: RefCounted = null
+
+
+func record(event_type: String, data := {}) -> void:
+	var event: Dictionary = data.duplicate()
+	event["type"] = event_type
+	event["order"] = events.size()
+	events.append(event)
 
 
 func _init(lab_world: RefCounted, command_registry: RefCounted) -> void:
@@ -73,10 +86,13 @@ func run(line: String) -> RefCounted:
 			output = ""  # lo redirigido no sigue por la tubería ni se muestra
 		stdin = output
 		final.exit_code = result.exit_code
+		final.notices.append_array(result.notices)
 
 	final.stdout = stdin
 	final.stderr = errors
 	last_exit_code = final.exit_code
+	if tracker != null:
+		final.notices.append_array(tracker.after_command(self))
 	return final
 
 

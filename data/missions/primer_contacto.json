@@ -1,0 +1,305 @@
+{
+	"id": "primer_contacto",
+	"title": "Primer contacto",
+	"lab": "primer_contacto",
+	"missions": [
+		{
+			"id": "m1_orientacion",
+			"title": "Orientación",
+			"briefing": "Acabas de entrar en ronin-box, tu máquina de trabajo. Antes de tocar la red, oriéntate: dónde estás, qué hay a tu alrededor y qué te dejan hacer.",
+			"objectives": [
+				{
+					"id": "m1_nota",
+					"text": "Localiza y lee la nota de la misión",
+					"concept": "navegacion",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/nota.txt"}},
+					"evidence": {"id": "ev_nota", "title": "nota.txt", "detail": "Red autorizada: 10.0.0.0/24"},
+					"hints": [
+						"El prompt te dice dónde estás. ¿Qué hay a tu alrededor ahí?",
+						"Hay un comando para listar lo que contiene un directorio y otro para mostrar el contenido de un archivo.",
+						"Prueba con `ls` y, cuando veas un archivo que parezca una nota, léelo con `cat`.",
+						"Estás en tu directorio personal (~). `ls` muestra `nota.txt` y `cat nota.txt` lo lee. Idea clave: primero mira (ls), luego lee (cat); el prompt siempre te dice dónde estás."
+					]
+				},
+				{
+					"id": "m1_oculto",
+					"text": "Encuentra y lee el archivo oculto de tu directorio personal",
+					"concept": "archivos_ocultos",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/.hidden"}},
+					"hints": [
+						"No todo lo que hay en un directorio aparece con un `ls` normal. ¿Por qué podría ocultarse algo?",
+						"En Linux, los archivos cuyo nombre empieza por un punto se consideran ocultos. Revisa las opciones de `ls`.",
+						"Prueba `ls -a` y lee el archivo que veas con un punto delante.",
+						"`ls -a` muestra también los archivos ocultos: aparece `.hidden`, y se lee con `cat .hidden`. Un `ls` a secas no te enseña todo; lo oculto no es secreto, solo no se muestra por defecto."
+					]
+				},
+				{
+					"id": "m1_usuarios",
+					"text": "Averigua qué usuarios existen en el sistema",
+					"concept": "usuarios",
+					"check": {"event": "file_read", "where": {"path": "/etc/passwd"}},
+					"evidence": {"id": "ev_usuarios", "title": "Usuarios", "detail": "root, ronin y www-data (cuenta de servicio)"},
+					"hints": [
+						"El sistema guarda en algún archivo la lista de cuentas. ¿Dónde vive la configuración en Linux?",
+						"La configuración del sistema vive en `/etc`. Busca un archivo cuyo nombre tenga que ver con 'passwd'.",
+						"Léelo con `cat /etc/passwd`: cada línea es una cuenta y el primer campo es el nombre.",
+						"`cat /etc/passwd` lista las cuentas: root, ronin y www-data. Los campos van separados por `:`; el primero es el usuario y el sexto su directorio personal."
+					]
+				},
+				{
+					"id": "m1_shadow",
+					"text": "Intenta leer /etc/shadow y observa qué ocurre",
+					"concept": "permisos",
+					"check": {"event": "permission_denied", "where": {"path": "/etc/shadow"}},
+					"hints": [
+						"Hay un archivo hermano de `passwd` que guarda datos más delicados. ¿Cómo se llama?",
+						"Se llama `shadow` y también está en `/etc`.",
+						"Intenta leerlo con `cat /etc/shadow` y fíjate bien en el mensaje.",
+						"`cat /etc/shadow` responde `Permission denied`: el archivo existe, pero tu usuario no puede leerlo. Que falle no es un error tuyo: es información sobre los permisos."
+					]
+				},
+				{
+					"id": "m1_q_shadow",
+					"text": "Interpreta por qué falló la lectura de /etc/shadow",
+					"concept": "permisos",
+					"requires": ["m1_shadow"],
+					"question": {
+						"prompt": "`cat /etc/shadow` devuelve `Permission denied`. ¿Qué es lo más correcto concluir?",
+						"options": [
+							{"text": "El archivo no existe.", "why": "Si no existiera diría `No such file or directory`. `Permission denied` significa que existe, pero no tienes permiso."},
+							{"text": "Tu usuario no tiene permiso de lectura sobre ese archivo.", "why": "Exacto. Puedes comprobarlo con `ls -l /etc/shadow`: pertenece a root, su grupo es shadow y 'otros' no tienen acceso."},
+							{"text": "El comando cat está roto.", "why": "cat funciona con otros archivos: el mensaje habla del archivo, no del comando."},
+							{"text": "Hay que reiniciar el sistema.", "why": "Un permiso no se arregla reiniciando: depende del dueño, el grupo y los bits de permisos del archivo."}
+						],
+						"correct": 1
+					},
+					"hints": [
+						"Fíjate en las palabras exactas del mensaje de error. ¿Dice que no existe?",
+						"Compara `No such file or directory` con `Permission denied`: no significan lo mismo.",
+						"Compruébalo tú: `ls -l /etc/shadow` muestra dueño, grupo y permisos. Descarta las opciones que no encajan con lo que ves.",
+						"Es la 2: `Permission denied` indica que el archivo existe pero tu usuario no tiene permiso (`-rw-r----- root shadow`: dueño root, grupo shadow y nada para otros)."
+					]
+				}
+			]
+		},
+		{
+			"id": "m2_quien_esta_ahi",
+			"title": "Quién está ahí",
+			"briefing": "La nota habla de una red autorizada. Antes de atacar nada hay que saber qué hay en ella, y qué NO puedes asegurar todavía.",
+			"objectives": [
+				{
+					"id": "m2_ping",
+					"text": "Comprueba que web01 responde",
+					"concept": "descubrimiento_hosts",
+					"check": {"event": "ping_reply", "where": {"ip": "10.0.0.5"}},
+					"evidence": {"id": "ev_web01_vivo", "title": "web01 responde", "detail": "10.0.0.5 contesta al ping: host activo"},
+					"hints": [
+						"¿Cómo se comprueba, con el mínimo ruido, que una máquina está viva?",
+						"Hay un comando clásico que envía un 'eco' y espera respuesta.",
+						"Prueba `ping -c 3 web01` (o con su IP, 10.0.0.5).",
+						"`ping -c 3 web01`: si hay respuestas, el host está vivo. Pero ojo: que NO responda no demuestra que esté apagado."
+					]
+				},
+				{
+					"id": "m2_barrido",
+					"text": "Descubre los hosts activos de la red 10.0.0.0/24",
+					"concept": "descubrimiento_hosts",
+					"check": {"event": "host_discovered", "distinct": "ip", "min": 2},
+					"evidence": {"id": "ev_hosts", "title": "Hosts activos", "detail": "ronin-box (10.0.0.2) y web01 (10.0.0.5)"},
+					"hints": [
+						"Ya sabes qué red es la autorizada. ¿Hay forma de preguntar a toda la red a la vez, sin escanear puertos todavía?",
+						"Nmap puede hacer solo descubrimiento de hosts, sin mirar puertos.",
+						"Mira la opción `-sn` de nmap y úsala con el rango 10.0.0.0/24.",
+						"`nmap -sn 10.0.0.0/24` lista los hosts que responden. ¿Esperabas ver más máquinas? Esa duda es la siguiente pregunta."
+					]
+				},
+				{
+					"id": "m2_hosts_file",
+					"text": "Lee /etc/hosts para ver qué máquinas conoce el sistema",
+					"concept": "descubrimiento_hosts",
+					"check": {"event": "file_read", "where": {"path": "/etc/hosts"}},
+					"evidence": {"id": "ev_hosts_file", "title": "Máquinas conocidas", "detail": "/etc/hosts lista ronin-box, web01 y files01"},
+					"hints": [
+						"El propio sistema suele tener una lista de nombres de máquinas conocidas.",
+						"Es un archivo de `/etc` que relaciona nombres con direcciones IP.",
+						"Léelo con `cat /etc/hosts` y compáralo con lo que encontró el barrido.",
+						"`cat /etc/hosts` muestra tres máquinas: ronin-box, web01 y files01. El barrido solo encontró dos: ¿qué pasó con la tercera?"
+					]
+				},
+				{
+					"id": "m2_q_files01",
+					"text": "Interpreta qué ocurre con files01",
+					"concept": "interpretacion_resultados",
+					"requires": ["m2_barrido", "m2_hosts_file"],
+					"question": {
+						"prompt": "files01 (10.0.0.9) aparece en /etc/hosts pero no en el barrido `nmap -sn`. ¿Qué conclusión es correcta?",
+						"options": [
+							{"text": "files01 no existe.", "why": "No puedes concluir eso: que algo no responda no demuestra que no exista. De hecho, está en /etc/hosts."},
+							{"text": "files01 puede estar encendido pero no responder a los sondeos de descubrimiento (por ejemplo, por un cortafuegos).", "why": "Correcto. La ausencia de respuesta no es ausencia de host. Hay que comprobarlo de otra forma, por ejemplo escaneando sus puertos sin descubrimiento previo (`-Pn`)."},
+							{"text": "nmap ha fallado y hay que reinstalarlo.", "why": "Nmap hizo lo que se le pidió: el resultado es información, no un fallo."},
+							{"text": "files01 está en otra red.", "why": "Su IP, 10.0.0.9, está dentro de 10.0.0.0/24: la misma red. No es esa la explicación."}
+						],
+						"correct": 1
+					},
+					"hints": [
+						"Piensa en qué demuestra exactamente 'no responde'. ¿Es lo mismo que 'no existe'?",
+						"Un cortafuegos puede descartar los sondeos de descubrimiento sin apagar la máquina.",
+						"Descarta primero las opciones que afirman algo que no puedes demostrar con lo que has visto.",
+						"Es la 2: no responder a un sondeo no prueba que el host no exista; puede estar vivo y filtrando el descubrimiento. En la siguiente misión lo comprobarás."
+					]
+				}
+			]
+		},
+		{
+			"id": "m3_que_ofrece",
+			"title": "Qué ofrece",
+			"briefing": "Ya sabes quién está. Ahora toca averiguar qué ofrece cada máquina: puertos, servicios y versiones, y aprender a leer lo que NO está claro.",
+			"objectives": [
+				{
+					"id": "m3_puertos",
+					"text": "Escanea web01 y localiza sus puertos abiertos",
+					"concept": "puertos_servicios",
+					"check": {"all": [
+						{"event": "port_found", "where": {"ip": "10.0.0.5", "port": 22, "state": "open"}},
+						{"event": "port_found", "where": {"ip": "10.0.0.5", "port": 80, "state": "open"}}
+					]},
+					"evidence": {"id": "ev_puertos", "title": "Puertos de web01", "detail": "22/tcp ssh y 80/tcp http abiertos; 8080/tcp filtrado"},
+					"hints": [
+						"Ya sabes que web01 está vivo. ¿Qué información te falta sobre él?",
+						"Un escaneo de puertos te dice qué puertos aceptan conexiones.",
+						"Usa nmap directamente contra web01 (o 10.0.0.5), sin opciones especiales.",
+						"`nmap web01` muestra 22/tcp (ssh) y 80/tcp (http) abiertos, y 8080/tcp filtrado. Un puerto abierto es una puerta: indica que hay un servicio escuchando."
+					]
+				},
+				{
+					"id": "m3_q_filtrado",
+					"text": "Interpreta el estado 'filtered' del puerto 8080",
+					"concept": "interpretacion_resultados",
+					"requires": ["m3_puertos"],
+					"question": {
+						"prompt": "En el escaneo, 8080/tcp aparece como `filtered`. ¿Qué significa?",
+						"options": [
+							{"text": "Está abierto, pero protegido con contraseña.", "why": "El estado no habla de contraseñas: habla de si nmap pudo determinar si el puerto está abierto o cerrado."},
+							{"text": "Está cerrado.", "why": "Un puerto cerrado responde con un rechazo (`closed`). `filtered` es distinto: no hubo una respuesta clara."},
+							{"text": "Nmap no puede saber si está abierto o cerrado: algo (como un cortafuegos) interfiere con los sondeos.", "why": "Correcto. `filtered` significa 'no se pudo determinar'. Puedes comprobarlo con `curl web01:8080` y compararlo con un puerto cerrado como `curl web01:81`."},
+							{"text": "Está abierto.", "why": "Si estuviera abierto, nmap lo mostraría como `open`."}
+						],
+						"correct": 2
+					},
+					"hints": [
+						"Compara los tres estados que has visto: open, closed y filtered. ¿Qué respuesta recibió nmap en cada caso?",
+						"Una respuesta de rechazo es información; la ausencia de respuesta es otra cosa distinta.",
+						"Prueba `curl web01:8080` y `curl web01:81` y compara los errores.",
+						"Es la 3: `filtered` = nmap no puede determinar el estado porque algo filtra los paquetes. No es ni abierto ni cerrado: es 'no se sabe'."
+					]
+				},
+				{
+					"id": "m3_version",
+					"text": "Identifica el producto y la versión del servidor web",
+					"concept": "versiones",
+					"check": {"event": "service_version", "where": {"ip": "10.0.0.5", "port": 80}},
+					"evidence": {"id": "ev_apache", "title": "Servidor web", "detail": "Apache httpd 2.4.49 en el puerto 80"},
+					"hints": [
+						"Saber que el puerto 80 está abierto no dice qué programa lo atiende.",
+						"Nmap puede intentar averiguar qué servicio y versión hay detrás de un puerto.",
+						"Prueba `nmap -sV` contra web01.",
+						"`nmap -sV web01` muestra `Apache httpd 2.4.49` en el 80. Es útil porque orienta qué buscar, pero una versión no demuestra por sí sola una vulnerabilidad."
+					]
+				},
+				{
+					"id": "m3_q_version",
+					"text": "Interpreta qué demuestra una versión",
+					"concept": "interpretacion_resultados",
+					"requires": ["m3_version"],
+					"question": {
+						"prompt": "Nmap muestra Apache httpd 2.4.49 en el puerto 80. ¿Qué puedes afirmar con seguridad?",
+						"options": [
+							{"text": "Que el servidor es vulnerable y se puede explotar.", "why": "Es un salto sin pruebas. Una versión es un indicio: hay que confirmar si esa versión tiene fallos conocidos, si la configuración los permite y si son alcanzables."},
+							{"text": "Que tiene esa versión instalada, y que hay que investigar si tiene vulnerabilidades conocidas antes de concluir nada más.", "why": "Correcto: es un dato y una hipótesis de trabajo, no una vulnerabilidad confirmada. Distinguir indicio, hipótesis y confirmación es la base del análisis."},
+							{"text": "Que es seguro porque es una versión reciente.", "why": "No sabes si es reciente ni si está parcheada; versión y seguridad no son lo mismo."},
+							{"text": "Nada: las versiones no sirven.", "why": "Sirven mucho para orientarte; solo que no bastan para concluir."}
+						],
+						"correct": 1
+					},
+					"hints": [
+						"Piensa en la diferencia entre 'tiene esta versión' y 'es vulnerable'.",
+						"Para llamar vulnerabilidad a algo necesitas una prueba, no solo un número de versión.",
+						"Descarta las opciones que afirman algo sin pruebas, y también las que lo niegan todo.",
+						"Es la 2: la versión es un dato; la vulnerabilidad aún es una hipótesis que habría que confirmar."
+					]
+				},
+				{
+					"id": "m3_oculto",
+					"text": "Encuentra el servicio del host que ignora el descubrimiento",
+					"concept": "descubrimiento_hosts",
+					"transfer": true,
+					"requires": ["m2_q_files01"],
+					"check": {"event": "port_found", "where": {"ip": "10.0.0.9", "port": 21, "state": "open"}},
+					"evidence": {"id": "ev_files01", "title": "Servicio oculto", "detail": "files01 (10.0.0.9) ejecuta ftp en el 21 aunque ignora el ping"},
+					"hints": [
+						"Ya sabes que files01 existe y que no contesta al descubrimiento. ¿Cómo escaneas sus puertos sin ese paso previo?",
+						"Nmap hace descubrimiento antes de escanear, salvo que se lo indiques.",
+						"Mira la opción `-Pn` de nmap y úsala contra 10.0.0.9.",
+						"`nmap -Pn 10.0.0.9` salta el descubrimiento y escanea igualmente: aparece 21/tcp open ftp. El host estaba vivo: ignorar el ping no equivale a estar apagado."
+					]
+				}
+			]
+		},
+		{
+			"id": "m4_lo_que_demuestras",
+			"title": "Lo que demuestras",
+			"briefing": "Has encontrado un servidor web. Mírale como lo haría un navegador y documenta lo que importe, con pruebas que otra persona pueda repetir.",
+			"objectives": [
+				{
+					"id": "m4_robots",
+					"text": "Lee el robots.txt del servidor web",
+					"concept": "http",
+					"check": {"event": "http_response", "where": {"ip": "10.0.0.5", "path": "/robots.txt", "status": 200}},
+					"evidence": {"id": "ev_robots", "title": "robots.txt", "detail": "Pide no indexar /backup/ y /admin/"},
+					"hints": [
+						"Los servidores web suelen publicar instrucciones para los buscadores. ¿Dónde?",
+						"Existe un archivo estándar en la raíz del sitio, llamado robots.txt.",
+						"Pídelo con curl: `curl web01/robots.txt`.",
+						"`curl web01/robots.txt` muestra rutas que NO quieren que se indexen: /backup/ y /admin/. Lo que se esconde de los buscadores suele merecer una mirada."
+					]
+				},
+				{
+					"id": "m4_backup",
+					"text": "Consigue el archivo de configuración antiguo expuesto en /backup/",
+					"concept": "http",
+					"requires": ["m4_robots"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.0.5", "path": "/backup/config.old", "status": 200}},
+					"evidence": {"id": "ev_config", "title": "config.old expuesto", "detail": "GET /backup/config.old devuelve 200 con credenciales de base de datos"},
+					"hints": [
+						"robots.txt mencionaba un directorio interesante. ¿Qué habrá dentro?",
+						"Pide la ruta del directorio y mira qué lista; después pide el archivo que aparezca.",
+						"`curl web01/backup/` lista un archivo: pídelo también con curl.",
+						"`curl web01/backup/` muestra `config.old` y `curl web01/backup/config.old` devuelve su contenido (credenciales de ejemplo). Esa es tu evidencia: la petición y la respuesta 200."
+					]
+				},
+				{
+					"id": "m4_q_informe",
+					"text": "Redacta el hallazgo con criterio profesional",
+					"concept": "informe",
+					"requires": ["m4_backup"],
+					"question": {
+						"prompt": "¿Cuál es la mejor forma de describir el hallazgo en un informe?",
+						"options": [
+							{"text": "El servidor ha sido hackeado: riesgo crítico.", "why": "No has demostrado ningún compromiso del servidor. Exagerar resta credibilidad."},
+							{"text": "Archivo de configuración antiguo expuesto en /backup/config.old, accesible sin autenticación y con credenciales de base de datos. Evidencia: GET /backup/config.old devuelve 200. Recomendación: eliminarlo y rotar las credenciales.", "why": "Correcto: dice qué es, dónde, cómo se demuestra, qué impacto tiene y qué hacer. Es reproducible y no afirma más de lo que has probado."},
+							{"text": "Apache 2.4.49 es vulnerable.", "why": "No lo has demostrado: la versión es solo un indicio. Y no es lo que encontraste."},
+							{"text": "robots.txt es peligroso.", "why": "robots.txt solo te dio una pista. El hallazgo real es el archivo expuesto."}
+						],
+						"correct": 1
+					},
+					"hints": [
+						"Un buen hallazgo responde a: qué, dónde, cómo se demuestra, qué impacto y qué se recomienda.",
+						"Desconfía de las frases que afirman más de lo que has probado.",
+						"Elige la que incluya la evidencia reproducible (la petición y su resultado) y una recomendación.",
+						"Es la 2: describe el hallazgo, su ubicación, la evidencia (GET con respuesta 200), el impacto y la mitigación."
+					]
+				}
+			]
+		}
+	]
+}

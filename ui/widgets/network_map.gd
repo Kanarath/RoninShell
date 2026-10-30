@@ -15,7 +15,7 @@ var world: RefCounted = null:
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(0, 150)
+	custom_minimum_size = Vector2(0, 90)
 
 
 func _draw() -> void:

@@ -5,6 +5,9 @@ extends RefCounted
 var stdout: String = ""
 var stderr: String = ""
 var exit_code: int = 0
+## Avisos del juego (objetivo completado, nueva misión...). No forman parte de la salida
+## del comando: la interfaz los muestra aparte, en otro color.
+var notices: Array[String] = []
 
 
 static func ok(output := "") -> RefCounted:

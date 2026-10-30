@@ -35,6 +35,7 @@ func _init() -> void:
 	output.add_theme_font_size_override("normal_font_size", FONT_SIZE)
 	output.add_theme_font_size_override("bold_font_size", FONT_SIZE)
 	output.add_theme_color_override("default_color", Palette.TEXT)
+	output.gui_input.connect(_on_output_gui_input)
 	add_child(output)
 
 	var row := HBoxContainer.new()
@@ -48,6 +49,9 @@ func _init() -> void:
 
 	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	input.caret_blink = true
+	# Sin esto, tras pulsar Enter el campo sale del modo edición y hay que pulsar Enter otra
+	# vez antes de poder escribir: una terminal de verdad siempre está lista para teclear.
+	input.keep_editing_on_text_submit = true
 	input.context_menu_enabled = false
 	input.add_theme_font_override("font", _mono)
 	input.add_theme_font_size_override("font_size", FONT_SIZE)
@@ -67,7 +71,7 @@ func setup(shell_session: RefCounted, banner: Array = []) -> void:
 	for line: String in banner:
 		print_text(line, Palette.TEXT_DIM)
 	_update_prompt()
-	input.call_deferred("grab_focus")
+	focus_input.call_deferred()
 
 
 ## Ejecuta una línea como si el jugador la hubiera escrito y pulsado Enter.
@@ -87,8 +91,40 @@ func submit(line: String) -> void:
 		print_text(result.stdout.trim_suffix("\n"), Palette.TEXT)
 	if result.stderr != "":
 		print_text(result.stderr.trim_suffix("\n"), Palette.DANGER)
+	for notice in result.notices:
+		print_text(notice, Palette.GOLD)
 	_update_prompt()
 	command_executed.emit(line, result)
+
+
+## Pone el cursor en la línea de comandos, listo para escribir.
+func focus_input() -> void:
+	input.grab_focus()
+	input.edit()
+
+
+## Cualquier tecla que no haya consumido otro control va a la línea de comandos, como en una
+## terminal real: no hace falta hacer clic ni pulsar Enter antes de escribir.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if session == null or not (event is InputEventKey) or not event.pressed or input.has_focus():
+		return
+	var key := event as InputEventKey
+	var is_text := key.unicode >= 32 and key.unicode != 127 and not key.ctrl_pressed and not key.alt_pressed and not key.meta_pressed
+	var is_navigation := key.keycode in [KEY_UP, KEY_DOWN, KEY_TAB, KEY_BACKSPACE, KEY_ENTER, KEY_KP_ENTER]
+	if not is_text and not is_navigation:
+		return
+	focus_input()
+	if is_text:
+		input.insert_text_at_caret(char(key.unicode))
+	elif key.keycode == KEY_BACKSPACE:
+		input.delete_char_at_caret()
+	elif key.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+		var line := input.text
+		input.clear()
+		submit(line)
+	else:
+		_on_input_gui_input(key)
+	get_viewport().set_input_as_handled()
 
 
 func print_text(text: String, color: Color) -> void:
@@ -123,9 +159,18 @@ func complete_input() -> void:
 		print_text("  ".join(result["options"]), Palette.TEXT_DIM)
 
 
+## Un clic en la pantalla de la terminal devuelve el cursor a la línea de comandos
+## (salvo que estés seleccionando texto para copiarlo).
+func _on_output_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if output.get_selected_text() == "":
+			focus_input.call_deferred()
+
+
 func _on_text_submitted(text: String) -> void:
 	input.clear()
 	submit(text)
+	focus_input.call_deferred()
 
 
 func _on_input_gui_input(event: InputEvent) -> void:

@@ -1,7 +1,6 @@
 extends Control
-## Pantalla principal (maqueta jugable del diseño "ronin neón").
-## La interfaz solo muestra; el estado sale del motor (engine/). Los objetivos y el
-## expediente son provisionales hasta el paso de misiones.
+## Pantalla principal "ronin neón". La interfaz solo muestra: el estado sale del motor
+## (engine/) y el progreso del motor de misiones. Aquí no hay reglas de juego.
 
 const Palette := preload("res://ui/theme/palette.gd")
 const CutFrame := preload("res://ui/widgets/cut_frame.gd")
@@ -11,17 +10,36 @@ const TerminalView := preload("res://ui/widgets/terminal_view.gd")
 const LabLoader := preload("res://engine/lab_loader.gd")
 const ShellSession := preload("res://engine/shell/shell_session.gd")
 const CommandSet := preload("res://engine/commands/command_set.gd")
+const MissionLoader := preload("res://engine/missions/mission_loader.gd")
+const MissionEngine := preload("res://engine/missions/mission_engine.gd")
+const MissionTracker := preload("res://engine/missions/mission_tracker.gd")
+const SaveStore := preload("res://game/save_store.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
+const MISSIONS_PATH := "res://data/missions/primer_contacto.json"
+const DOSSIER_SLOTS := 4
 
 var world: RefCounted = null
 var session: RefCounted = null
+var mission_engine: RefCounted = null
+var tracker: RefCounted = null
 var terminal := TerminalView.new()
+## Si es false no se lee ni se escribe progreso (tests y capturas con --no-save).
+var persist := true
+
 var _overlay := ColorRect.new()
+var _store := SaveStore.new()
+var _mission_label := Label.new()
+var _level_label := Label.new()
+var _xp_bar := ProgressBar.new()
+var _objectives_frame: Control = null
+var _dossier_frame: Control = null
+var _dossier_grid := GridContainer.new()
 
 
 func _ready() -> void:
+	persist = not ("--no-save" in OS.get_cmdline_user_args() or Engine.has_meta("roninshell_no_save"))
 	var result := LabLoader.load_file(LAB_PATH)
 	if result["world"] == null:
 		push_error("No se pudo cargar el laboratorio: %s" % str(result["errors"]))
@@ -31,6 +49,7 @@ func _ready() -> void:
 	_build_layout()
 	_build_overlay()
 	_start_session()
+	_refresh_missions()
 
 	var demo_commands: Array = []
 	var screenshot_path := ""
@@ -49,6 +68,113 @@ func _unhandled_input(event: InputEvent) -> void:
 	# F2 apaga o enciende el VFX (ajuste de accesibilidad: más adelante irá en opciones).
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
 		_overlay.visible = not _overlay.visible
+
+
+# --- Sesión y misiones --------------------------------------------------------
+
+func _start_session() -> void:
+	if world == null:
+		terminal.print_text("No se pudo cargar el laboratorio.", Palette.DANGER)
+		return
+
+	var banner: Array = ["RoninShell  -  laboratorio \"%s\"" % world.title]
+	var loaded := MissionLoader.load_file(MISSIONS_PATH)
+	if loaded["book"] != null:
+		mission_engine = MissionEngine.new(loaded["book"])
+		tracker = MissionTracker.new(mission_engine)
+		if persist and _store.load_into(mission_engine):
+			banner.append("Progreso restaurado. Escribe `mision` para ver dónde estabas.")
+		else:
+			banner.append("Escribe `mision` para ver tu primer objetivo y `help` para ver los comandos. Tab completa.")
+	else:
+		push_error("No se pudieron cargar las misiones: %s" % str(loaded["errors"]))
+
+	session = ShellSession.new(world, CommandSet.create_registry(tracker))
+	session.tracker = tracker
+	banner.append("")
+	terminal.setup(session, banner)
+	terminal.command_executed.connect(_on_command_executed)
+
+
+func _on_command_executed(_line: String, _result: RefCounted) -> void:
+	_refresh_missions()
+	if persist and mission_engine != null:
+		_store.save(mission_engine)
+
+
+## Redibuja los paneles que dependen del progreso: misión, objetivos, XP y evidencias.
+func _refresh_missions() -> void:
+	if mission_engine == null:
+		return
+	if mission_engine.is_finished():
+		_mission_label.text = "LABORATORIO COMPLETADO"
+	else:
+		_mission_label.text = "MISIÓN %d  ·  %s" % [mission_engine.mission_index + 1, mission_engine.current_mission()["title"].to_upper()]
+	_level_label.text = "NV %d" % mission_engine.level()
+	_xp_bar.value = mission_engine.level_progress() * 100.0
+	_rebuild_objectives()
+	_rebuild_dossier()
+
+
+func _rebuild_objectives() -> void:
+	var content: VBoxContainer = _objectives_frame.content
+	for child in content.get_children():
+		content.remove_child(child)
+		child.queue_free()
+	if mission_engine.is_finished():
+		content.add_child(_colored_label("Has completado todas las misiones.", Palette.GOLD, 14))
+		return
+
+	var active: Dictionary = mission_engine.active_objective()
+	for objective: Dictionary in mission_engine.objectives():
+		var state := SealIcon.State.PENDING
+		var tag := "PENDIENTE"
+		var tag_color: Color = Palette.GOLD_DIM
+		if mission_engine.status_of(objective["id"]) == "done":
+			state = SealIcon.State.DONE
+			tag = "COMPLETADO"
+			tag_color = Palette.GOLD
+		elif not mission_engine.is_available(objective):
+			tag = "BLOQUEADO"
+		elif not active.is_empty() and active["id"] == objective["id"]:
+			state = SealIcon.State.ACTIVE
+			tag = "EN CURSO"
+			tag_color = Palette.TEAL
+		elif objective.has("question"):
+			tag = "PREGUNTA"
+			tag_color = Palette.TEAL_DIM
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var seal := SealIcon.new()
+		seal.state = state
+		seal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(seal)
+		var texts := VBoxContainer.new()
+		texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		texts.add_theme_constant_override("separation", 0)
+		var title := _colored_label(objective["text"], Palette.TEXT_DIM if state == SealIcon.State.DONE else Palette.TEXT, 13)
+		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		texts.add_child(title)
+		texts.add_child(_colored_label("[%s]" % tag, tag_color, 10))
+		row.add_child(texts)
+		content.add_child(row)
+
+
+func _rebuild_dossier() -> void:
+	for child in _dossier_grid.get_children():
+		_dossier_grid.remove_child(child)
+		child.queue_free()
+	var collected: Array = []
+	for card: Dictionary in mission_engine.evidence_cards():
+		if card["collected"]:
+			collected.append(card)
+	var shown: Array = collected.slice(maxi(0, collected.size() - DOSSIER_SLOTS))
+	for slot in DOSSIER_SLOTS:
+		if slot < shown.size():
+			_dossier_grid.add_child(_evidence_card(shown[slot]["title"], true))
+		else:
+			_dossier_grid.add_child(_evidence_card("?", false))
 
 
 # --- Construcción de la interfaz -------------------------------------------
@@ -96,21 +222,22 @@ func _build_layout() -> void:
 	side.size_flags_stretch_ratio = 1.25
 	side.add_theme_constant_override("separation", 12)
 	body.add_child(side)
-	side.add_child(_build_objectives_panel())
+	_objectives_frame = _build_objectives_panel()
+	side.add_child(_objectives_frame)
 	side.add_child(_build_map_panel())
-	side.add_child(_build_dossier_panel())
+	_dossier_frame = _build_dossier_panel()
+	side.add_child(_dossier_frame)
 
 
 func _build_top_bar() -> Control:
 	var bar := HBoxContainer.new()
 	bar.custom_minimum_size = Vector2(0, 62)
 
-	var mission := Label.new()
-	mission.text = "MISIÓN 2  ·  QUIÉN ESTÁ AHÍ"
-	mission.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mission.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	mission.add_theme_color_override("font_color", Palette.TEXT_DIM)
-	bar.add_child(mission)
+	_mission_label.name = "MissionLabel"
+	_mission_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mission_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_mission_label.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	bar.add_child(_mission_label)
 
 	var brand := VBoxContainer.new()
 	brand.add_theme_constant_override("separation", 4)
@@ -159,13 +286,15 @@ func _build_xp_bar() -> Control:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)
-	row.add_child(_colored_label("XP", Palette.TEXT_DIM, 12))
+	_level_label.text = "NV 1"
+	_level_label.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	_level_label.add_theme_font_size_override("font_size", 12)
+	row.add_child(_level_label)
 
-	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(340, 8)
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar.show_percentage = false
-	bar.value = 38.0
+	_xp_bar.custom_minimum_size = Vector2(340, 8)
+	_xp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_xp_bar.show_percentage = false
+	_xp_bar.value = 0.0
 	var back := StyleBoxFlat.new()
 	back.bg_color = Palette.PANEL_DEEP
 	back.border_color = Palette.TEAL_DIM
@@ -174,9 +303,9 @@ func _build_xp_bar() -> Control:
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = Palette.GOLD
 	fill.set_corner_radius_all(4)
-	bar.add_theme_stylebox_override("background", back)
-	bar.add_theme_stylebox_override("fill", fill)
-	row.add_child(bar)
+	_xp_bar.add_theme_stylebox_override("background", back)
+	_xp_bar.add_theme_stylebox_override("fill", fill)
+	row.add_child(_xp_bar)
 	return row
 
 
@@ -186,7 +315,6 @@ func _build_terminal_panel() -> Control:
 	frame.title = "Terminal"
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.size_flags_stretch_ratio = 3.0
-
 	terminal.name = "TerminalView"
 	frame.content.add_child(terminal)
 	return frame
@@ -196,28 +324,7 @@ func _build_objectives_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Objectives"
 	frame.title = "Objetivos de misión"
-
-	var objectives := [
-		["Localiza la nota de la misión", "COMPLETADO", SealIcon.State.DONE],
-		["Descubre los hosts activos", "EN CURSO", SealIcon.State.ACTIVE],
-		["Identifica el servicio web", "PENDIENTE", SealIcon.State.PENDING],
-	]
-	for objective in objectives:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
-		var seal := SealIcon.new()
-		seal.state = objective[2]
-		seal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(seal)
-
-		var texts := VBoxContainer.new()
-		texts.add_theme_constant_override("separation", 0)
-		var done: bool = objective[2] == SealIcon.State.DONE
-		texts.add_child(_colored_label(objective[0], Palette.TEXT if not done else Palette.TEXT_DIM, 14))
-		var tag_color := Palette.GOLD if done else (Palette.TEAL if objective[2] == SealIcon.State.ACTIVE else Palette.GOLD_DIM)
-		texts.add_child(_colored_label("[%s]" % objective[1], tag_color, 11))
-		row.add_child(texts)
-		frame.content.add_child(row)
+	frame.content.add_theme_constant_override("separation", 4)
 	return frame
 
 
@@ -238,23 +345,17 @@ func _build_dossier_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Dossier"
 	frame.title = "Expediente de evidencias"
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 8)
-	frame.content.add_child(grid)
-
-	var cards: Array = [["nota.txt", true], ["web01 · puertos", true], ["?", false], ["?", false]]
-	for card_data in cards:
-		grid.add_child(_evidence_card(card_data[0], card_data[1]))
+	_dossier_grid.columns = 2
+	_dossier_grid.add_theme_constant_override("h_separation", 10)
+	_dossier_grid.add_theme_constant_override("v_separation", 6)
+	frame.content.add_child(_dossier_grid)
 	return frame
 
 
 func _evidence_card(label: String, collected: bool) -> Control:
 	var card := PanelContainer.new()
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size = Vector2(0, 34)
+	card.custom_minimum_size = Vector2(0, 28)
 	var style := StyleBoxFlat.new()
 	style.set_corner_radius_all(3)
 	if collected:
@@ -279,20 +380,6 @@ func _build_overlay() -> void:
 	material.shader = CrtShader
 	_overlay.material = material
 	add_child(_overlay)
-
-
-# --- Sesión de shell ----------------------------------------------------------
-
-func _start_session() -> void:
-	if world == null:
-		terminal.print_text("No se pudo cargar el laboratorio.", Palette.DANGER)
-		return
-	session = ShellSession.new(world, CommandSet.create_registry())
-	terminal.setup(session, [
-		"RoninShell  -  laboratorio \"%s\"" % world.title,
-		"Red autorizada: %s. Escribe 'help' para ver los comandos y usa Tab para completar." % world.cidr,
-		"",
-	])
 
 
 # --- Utilidades -------------------------------------------------------------
