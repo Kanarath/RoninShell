@@ -7,7 +7,8 @@ const TREE := [
 	{"title": "Fundamentos Linux", "concepts": [["navegacion", "Navegación"], ["archivos_ocultos", "Ocultos"], ["usuarios", "Usuarios"], ["permisos", "Permisos"]]},
 	{"title": "Redes y reconocimiento", "concepts": [["descubrimiento_hosts", "Descubrir"], ["puertos_servicios", "Puertos"], ["versiones", "Versiones"], ["interpretacion_resultados", "Interpretar"]]},
 	{"title": "Web", "concepts": [["http", "HTTP"], ["cabeceras_http", "Cabeceras"], ["cookies_sesiones", "Cookies"], ["control_acceso", "Acceso"]]},
-	{"title": "Análisis e informe", "concepts": [["alcance", "Alcance"], ["analisis_hallazgos", "Hallazgos"], ["informe", "Informe"]]},
+	{"title": "Análisis e informe", "concepts": [["alcance", "Alcance"], ["analisis_hallazgos", "Hallazgos"], ["analisis_logs", "Logs"], ["informe", "Informe"]]},
+	{"title": "Automatización", "concepts": [["tuberias", "Tuberías"], ["variables_shell", "Variables"], ["bucles", "Bucles"], ["encadenar_comandos", "Encadenar"]]},
 ]
 
 const ACHIEVEMENTS := [

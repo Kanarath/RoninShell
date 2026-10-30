@@ -15,7 +15,7 @@ var counts: Dictionary = {}    # concepto -> objetivos completados
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(520, 380)
+	custom_minimum_size = Vector2(520, 440)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 

@@ -1,0 +1,210 @@
+{
+	"id": "guardia_logs",
+	"title": "Guardia de logs",
+	"lab": "guardia_logs",
+	"missions": [
+		{
+			"id": "g1_contar",
+			"title": "Leer y contar registros",
+			"briefing": "Esta vez estás de guardia: defiendes un servidor propio. Los registros (logs) cuentan quién intentó entrar y qué pasó. Leerlos línea a línea no escala, así que combinas comandos con tuberías para contar. `cheatsheet scripts` resume la sintaxis.",
+			"objectives": [
+				{
+					"id": "g1_alcance",
+					"text": "Lee la nota del cliente para saber qué se revisa",
+					"short": "Lee el alcance",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de revisar nada, confirma qué te toca revisar.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: solo se revisan los registros de este servidor."
+					]
+				},
+				{
+					"id": "g2_leer_auth",
+					"text": "Lee el registro de autenticación /var/log/auth.log",
+					"short": "Lee auth.log",
+					"concept": "analisis_logs",
+					"requires": ["g1_alcance"],
+					"check": {"event": "file_read", "where": {"path": "/var/log/auth.log"}},
+					"hints": [
+						"Los registros de SSH (quién entra y quién falla) viven en /var/log.",
+						"El archivo se llama auth.log.",
+						"`cat /var/log/auth.log`: cada línea dice la hora, el servicio, qué pasó y desde qué IP."
+					]
+				},
+				{
+					"id": "g3_contar_fallos",
+					"text": "Cuenta con una tubería (grep ... | wc -l) cuántos intentos fallidos hay en auth.log",
+					"short": "Cuenta los intentos fallidos",
+					"concept": "tuberias",
+					"requires": ["g2_leer_auth"],
+					"check": {"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}},
+					"evidence": {"id": "evg_fallos", "title": "Intentos fallidos", "detail": "9 líneas 'Failed password' en auth.log"},
+					"hints": [
+						"Buscar con grep y contar con wc se combina con una tubería: la salida del primero entra en el segundo.",
+						"Las líneas que importan contienen 'Failed password'. `wc -l` cuenta líneas.",
+						"`grep 'Failed password' /var/log/auth.log | wc -l` devuelve 9."
+					]
+				},
+				{
+					"id": "g4_clasif_fuerza",
+					"text": "Anota en tu cuaderno qué has comprobado de la IP 203.0.113.7 (`hallazgo`): sus fallos seguidos en pocos segundos",
+					"short": "Clasifica los fallos de 203.0.113.7",
+					"concept": "analisis_hallazgos",
+					"requires": ["g3_contar_fallos"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["203.0.113.7"]}},
+					"classify": {
+						"keywords": ["203.0.113.7"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: que esa IP falló 6 veces en 14 segundos está en el log y cualquiera puede contarlo, es un hecho. Lo que NO sabes aún es quién está detrás ni con qué intención: eso sería otra anotación, una hipótesis.",
+						"feedback": {
+							"indicio": "Los fallos no son un indicio: los has contado tú en el log y se pueden repetir con el mismo comando.",
+							"hipotesis": "Que haya fallos desde esa IP no es una suposición, está escrito en el registro. Una hipótesis sería explicar por qué ocurre.",
+							"falso-positivo": "No lo es: los intentos fallidos existen de verdad en el registro."
+						}
+					},
+					"hints": [
+						"¿Esto lo supones o lo has contado tú en el registro?",
+						"Un hecho que cualquiera puede repetir con el mismo comando se anota como confirmado.",
+						"Por ejemplo `hallazgo confirmado \"6 intentos fallidos de contraseña desde 203.0.113.7 en 14 segundos\"`."
+					]
+				}
+			]
+		},
+		{
+			"id": "g2_automatizar",
+			"title": "Variables y bucles",
+			"briefing": "Contar una IP está bien; contar varias a mano cansa. Con variables y bucles repites la misma comprobación para cada IP de una lista. Es la base de automatizar tareas de defensa.",
+			"objectives": [
+				{
+					"id": "g5_variable",
+					"text": "Guarda una IP en una variable (por ejemplo IP=203.0.113.7)",
+					"short": "Guarda una IP en una variable",
+					"concept": "variables_shell",
+					"check": {"event": "var_set"},
+					"hints": [
+						"Una variable guarda un valor con un nombre para reutilizarlo.",
+						"Se crea con NOMBRE=valor, sin espacios alrededor del =.",
+						"`IP=203.0.113.7` y luego puedes usar `$IP` en cualquier comando, por ejemplo `grep $IP /var/log/auth.log`."
+					]
+				},
+				{
+					"id": "g6_bucle",
+					"text": "Recorre las IP de vigilar.txt con un bucle for y cuenta con grep | wc los registros de cada una",
+					"short": "Bucle sobre vigilar.txt",
+					"concept": "bucles",
+					"requires": ["g5_variable"],
+					"check": {"all": [
+						{"event": "loop_ran"},
+						{"event": "file_read", "where": {"path": "/home/ronin/vigilar.txt"}},
+						{"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}, "min": 4}
+					]},
+					"evidence": {"id": "evg_bucle", "title": "Recuento por IP", "detail": "203.0.113.7: 6, 198.51.100.23: 2, 192.168.1.5: 1 intentos fallidos"},
+					"hints": [
+						"Un bucle for repite un comando para cada elemento de una lista. El contenido de un archivo se obtiene con $(cat archivo).",
+						"Forma general: for x in $(cat lista.txt); do COMANDO con $x; done",
+						"`for ip in $(cat vigilar.txt); do echo $ip; grep \"Failed password.*$ip\" /var/log/auth.log | wc -l; done` muestra 6, 2 y 1."
+					]
+				},
+				{
+					"id": "g7_clasif_normal",
+					"text": "Anota con la clasificación correcta qué ocurre con 192.168.1.5 (`hallazgo`): un fallo y luego acceso aceptado",
+					"short": "Clasifica 192.168.1.5",
+					"concept": "analisis_hallazgos",
+					"requires": ["g6_bucle"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["hipotesis", "falso-positivo"]}, "contains": {"text": ["192.168.1.5"]}},
+					"classify": {
+						"keywords": ["192.168.1.5"],
+						"accepted": ["falso-positivo", "hipotesis"],
+						"ok": "Razonable: un único fallo seguido de un acceso aceptado de la misma IP encaja con un despiste al teclear la contraseña, no con un ataque. Decidir si es un falso positivo requiere saber que esa IP es de confianza; sin eso, es una hipótesis.",
+						"feedback": {
+							"indicio": "Ya tienes algo más que un indicio: ves el fallo y el acceso posterior en el log.",
+							"confirmado": "Lo confirmado es que hubo un fallo y luego un acceso; que sea inofensivo es una interpretación, así que no lo afirmes como hecho."
+						}
+					},
+					"hints": [
+						"Mira el orden: un fallo y, doce segundos después, un acceso aceptado de la misma IP.",
+						"¿Parece un ataque o un despiste? Y ¿qué dato te faltaría para estar seguro?",
+						"Por ejemplo `hallazgo falso-positivo \"192.168.1.5: un fallo y acceso aceptado después, parece un despiste\"` (o hipotesis si no sabes que la IP es de confianza)."
+					]
+				}
+			]
+		},
+		{
+			"id": "g3_encadenar",
+			"title": "Encadenar y proponer medidas",
+			"briefing": "Último paso: comprobaciones encadenadas que solo siguen si lo anterior funcionó, y un informe con medidas defensivas. `man test` y `cheatsheet scripts` te ayudan.",
+			"objectives": [
+				{
+					"id": "g8_and",
+					"text": "Encadena con && una comprobación y una acción (por ejemplo test -f /var/log/auth.log && grep -c Failed /var/log/auth.log)",
+					"short": "Encadena con &&",
+					"concept": "encadenar_comandos",
+					"check": {"event": "list_op", "where": {"op": "&&", "ran": true}},
+					"hints": [
+						"`&&` ejecuta el segundo comando solo si el primero salió bien (código 0).",
+						"`test -f archivo` comprueba que existe; no escribe nada, solo devuelve el código.",
+						"`test -f /var/log/auth.log && grep -c Failed /var/log/auth.log` cuenta solo si el archivo existe."
+					]
+				},
+				{
+					"id": "g9_or",
+					"text": "Usa || para dar un aviso de respaldo cuando algo no se cumple (por ejemplo test -f ... || echo aviso)",
+					"short": "Aviso de respaldo con ||",
+					"concept": "encadenar_comandos",
+					"requires": ["g8_and"],
+					"check": {"event": "list_op", "where": {"op": "||"}},
+					"hints": [
+						"`||` ejecuta el segundo comando solo si el primero FALLÓ.",
+						"Sirve para avisar: `test -f /var/log/noexiste || echo 'falta el log'`.",
+						"`test -f /var/log/noexiste || echo falta el log` imprime el aviso porque el primer comando falla."
+					]
+				},
+				{
+					"id": "g10_transfer",
+					"text": "Transferencia: cuenta con grep | wc cuántas peticiones del access.log acabaron en 404 (páginas inexistentes)",
+					"short": "Transferencia: cuenta los 404",
+					"concept": "analisis_logs",
+					"transfer": true,
+					"requires": ["g8_and"],
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/var/log/access.log"}},
+						{"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}, "min": 5}
+					]},
+					"hints": [
+						"Es el mismo patrón que con auth.log, pero con otro archivo y otro texto a buscar.",
+						"En access.log el código de respuesta aparece como ' 404 '.",
+						"`grep ' 404 ' /var/log/access.log | wc -l` devuelve 3."
+					]
+				},
+				{
+					"id": "g11_informe",
+					"text": "Redacta en informe/borrador.md qué observaste y qué medidas propones, y supera la revisión (`revisar`). Puedes usar `nano informe/borrador.md`",
+					"short": "Informe con medidas defensivas",
+					"concept": "informe",
+					"requires": ["g9_or", "g10_transfer", "g4_clasif_fuerza"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 100,
+						"forbidden": ["hackead", "comprometid", "atacante identificado"],
+						"elements": [
+							{"id": "que", "label": "Qué: describe lo observado", "any": ["intentos fallidos", "failed password", "contraseña"]},
+							{"id": "donde", "label": "Dónde: servidor y archivo", "any": ["auth.log", "log-box", "/var/log"]},
+							{"id": "evidencia", "label": "Evidencia: cifras o IP", "any": ["203.0.113.7", "9 ", "6 "]},
+							{"id": "impacto", "label": "Impacto: qué riesgo supone", "any": ["fuerza bruta", "adivinar", "riesgo", "acceso no autorizado"]},
+							{"id": "recomendacion", "label": "Recomendación: medidas defensivas", "any": ["bloquear", "fail2ban", "clave pública", "claves públicas", "limitar", "desactivar el acceso con contraseña", "firewall"]}
+						]
+					},
+					"evidence": {"id": "evg_informe", "title": "Informe de logs", "detail": "borrador.md supera la revisión"},
+					"hints": [
+						"Un buen informe responde a cinco preguntas: qué, dónde, evidencia, impacto y qué hacer. No afirmes quién es el responsable: solo lo que muestran los logs.",
+						"Escribe en el editor (`nano informe/borrador.md`) o con `echo ... >> informe/borrador.md` y usa `revisar` para ver qué falta.",
+						"Ejemplo: \"En /var/log/auth.log de log-box hay 9 intentos fallidos de contraseña; 6 vienen de 203.0.113.7 en 14 segundos, un patrón compatible con fuerza bruta. Riesgo: adivinar una contraseña y lograr acceso no autorizado. Recomendación: usar claves públicas, desactivar el acceso con contraseña y bloquear IP con fail2ban.\""
+					]
+				}
+			]
+		}
+	]
+}
