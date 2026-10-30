@@ -58,6 +58,37 @@ func test_listado_ordenado_y_solo_hijos_directos() -> void:
 	assert_eq(fs.list_dir("/home/ronin/a.txt"), [], "un archivo no se lista")
 
 
+func test_permisos_estilo_unix() -> void:
+	var fs := Vfs.new()
+	fs.add_dir("/priv", "root", "root", "700")
+	fs.add_file("/priv/x", "x", "root", "root", "644")
+	fs.add_dir("/pub", "ana", "staff", "755")
+	fs.add_file("/pub/doc", "d", "ana", "staff", "640")
+	var ana := {"name": "ana", "uid": 1001, "groups": ["ana", "staff"]}
+	var luis := {"name": "luis", "uid": 1002, "groups": ["luis", "staff"]}
+	var visitante := {"name": "visitante", "uid": 1003, "groups": ["visitante"]}
+	var root := {"name": "root", "uid": 0, "groups": ["root"]}
+	assert_true(fs.check_access("/pub/doc", ana, "r"), "el dueño lee")
+	assert_true(fs.check_access("/pub/doc", ana, "w"), "el dueño escribe")
+	assert_true(fs.check_access("/pub/doc", luis, "r"), "el grupo lee")
+	assert_false(fs.check_access("/pub/doc", luis, "w"), "el grupo no escribe")
+	assert_false(fs.check_access("/pub/doc", visitante, "r"), "otros no leen")
+	assert_false(fs.check_access("/priv/x", ana, "r"), "el archivo es legible, pero no se puede entrar a /priv")
+	assert_true(fs.check_access("/priv/x", root, "r"), "root puede todo")
+
+
+func test_mode_string_y_tamano() -> void:
+	var fs := Vfs.new()
+	fs.add_dir("/d", "u", "g", "750")
+	fs.add_file("/d/f", "hola", "u", "g", "644")
+	assert_eq(fs.mode_string("/d"), "drwxr-x---")
+	assert_eq(fs.mode_string("/d/f"), "-rw-r--r--")
+	assert_eq(fs.size_of("/d/f"), 4)
+	assert_eq(fs.size_of("/d"), 4096)
+	assert_true(fs.set_mode("/d/f", "600"))
+	assert_eq(fs.mode_string("/d/f"), "-rw-------")
+
+
 func test_metadatos_y_copia_defensiva() -> void:
 	var fs := _sample()
 	var info: Dictionary = fs.get_node_info("/home/ronin")

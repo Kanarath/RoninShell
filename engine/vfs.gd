@@ -39,6 +39,69 @@ func add_file(path: String, content: String, owner := "root", group := "root", m
 
 enum WriteResult { OK, NO_PARENT, NOT_DIR_PARENT, IS_DIR }
 
+const DIR_SIZE := 4096  # tamaño que muestra ls -l para un directorio, como en Linux
+
+
+## ¿Puede "user" hacer "want" ("r", "w" o "x") sobre "path"?
+## user = {name, uid, groups}. Sigue las reglas de Unix:
+##   - root (uid 0) puede todo.
+##   - se aplica UNA sola clase: dueño, si no grupo, si no "otros".
+##   - para llegar a un archivo hace falta permiso "x" en cada directorio del camino.
+func check_access(path: String, user: Dictionary, want: String) -> bool:
+	if int(user.get("uid", 1000)) == 0:
+		return true
+	var ancestor := path.get_base_dir()
+	while ancestor != "/" and ancestor != "":
+		if not _mode_allows(ancestor, user, "x"):
+			return false
+		ancestor = ancestor.get_base_dir()
+	if path != "/" and not _mode_allows("/", user, "x"):
+		return false
+	return _mode_allows(path, user, want)
+
+
+func _mode_allows(path: String, user: Dictionary, want: String) -> bool:
+	if not _nodes.has(path):
+		return false
+	var node: Dictionary = _nodes[path]
+	var who := 2  # otros
+	if node["owner"] == user.get("name", ""):
+		who = 0
+	elif node["group"] in user.get("groups", [user.get("name", "")]):
+		who = 1
+	var digit := int(str(node["mode"])[who])
+	var bit: int = {"r": 4, "w": 2, "x": 1}[want]
+	return (digit & bit) != 0
+
+
+func set_mode(path: String, mode: String) -> bool:
+	if not _nodes.has(path):
+		return false
+	_nodes[path]["mode"] = mode
+	return true
+
+
+## Permisos en texto, como los muestra ls -l: "drwxr-x---" o "-rw-r--r--".
+func mode_string(path: String) -> String:
+	if not _nodes.has(path):
+		return ""
+	var node: Dictionary = _nodes[path]
+	var text: String = "d" if node["type"] == "dir" else "-"
+	for who in 3:
+		var digit := int(str(node["mode"])[who])
+		text += "r" if digit & 4 else "-"
+		text += "w" if digit & 2 else "-"
+		text += "x" if digit & 1 else "-"
+	return text
+
+
+func size_of(path: String) -> int:
+	if not _nodes.has(path):
+		return 0
+	if _nodes[path]["type"] == "dir":
+		return DIR_SIZE
+	return (_nodes[path]["content"] as String).to_utf8_buffer().size()
+
 
 ## Escribe (o añade a) un archivo, creándolo si no existe. Es lo que usa ">" y ">>".
 ## Todavía no comprueba permisos: llegarán con los comandos de archivos (paso 4).

@@ -55,7 +55,7 @@ func test_primer_contacto_sistema_de_archivos_del_jugador() -> void:
 	var fs = world.player_host().fs
 	assert_true(fs.is_file("/home/ronin/nota.txt"))
 	assert_true("10.0.0.0/24" in fs.read_file("/home/ronin/nota.txt"))
-	assert_eq(fs.list_dir("/home/ronin"), [".hidden", "nota.txt"])
+	assert_eq(fs.list_dir("/home/ronin"), [".hidden", "herramientas", "informe", "nota.txt"])
 	assert_eq(fs.get_node_info("/home/ronin/.hidden")["mode"], "600")
 	assert_true(world.player_host().has_user("ronin"))
 

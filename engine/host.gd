@@ -70,10 +70,15 @@ static func from_dict(data: Variant, errors: Array) -> RefCounted:
 		if typeof(user_data) != TYPE_DICTIONARY or str(user_data.get("name", "")) == "":
 			errors.append("%s: cada usuario necesita 'name'" % context)
 			continue
+		var groups: Array = [str(user_data["name"])]
+		for extra in user_data.get("groups", []):
+			if not str(extra) in groups:
+				groups.append(str(extra))
 		host.users.append({
 			"name": str(user_data["name"]),
 			"uid": int(user_data.get("uid", 1000)),
 			"home": str(user_data.get("home", "/home/" + str(user_data["name"]))),
+			"groups": groups,
 		})
 
 	_load_filesystem(host, data.get("fs", {}), errors, context)

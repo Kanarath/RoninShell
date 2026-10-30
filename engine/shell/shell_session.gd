@@ -16,7 +16,7 @@ const HISTORY_LIMIT := 500
 var world: RefCounted
 var registry: RefCounted
 var host: RefCounted
-var user: Dictionary = {"name": "root", "uid": 0, "home": "/"}
+var user: Dictionary = {"name": "root", "uid": 0, "home": "/", "groups": ["root"]}
 var cwd: String = "/"
 var history: Array[String] = []
 var last_exit_code: int = 0
@@ -92,6 +92,12 @@ func _run_command(argv: Array, stdin: String) -> RefCounted:
 func _apply_redirect(redirect: Dictionary, content: String) -> String:
 	var path: String = redirect["path"]
 	var absolute := Vfs.normalize(cwd, path)
+	if host.fs.is_dir(absolute):
+		return "bash: %s: Is a directory\n" % path  # bash lo dice antes de mirar permisos
+	# Crear un archivo exige poder escribir en su directorio; sobrescribirlo, poder escribir en él.
+	var target_for_check := absolute if host.fs.exists(absolute) else absolute.get_base_dir()
+	if host.fs.exists(target_for_check) and not host.fs.check_access(target_for_check, user, "w"):
+		return "bash: %s: Permission denied\n" % path
 	var outcome: int = host.fs.write_file(absolute, content, redirect["mode"] == "append", user["name"], user["name"])
 	match outcome:
 		Vfs.WriteResult.NO_PARENT:

@@ -9,10 +9,51 @@
 			"hostname": "ronin-box",
 			"os": "Linux",
 			"users": [
-				{"name": "ronin", "uid": 1000, "home": "/home/ronin"}
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
 			],
 			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/hosts": {
+					"type": "file",
+					"content": "127.0.0.1 localhost\n10.0.0.2 ronin-box\n10.0.0.5 web01\n10.0.0.9 files01\n"
+				},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\nwww-data:x:33:33:www-data:/var/www:/usr/sbin/nologin\n"
+				},
+				"/etc/shadow": {
+					"type": "file",
+					"group": "shadow",
+					"mode": "640",
+					"content": "root:$6$lab$notarealhash:19000:0:99999:7:::\nronin:$6$lab$notarealhash2:19000:0:99999:7:::\n"
+				},
+				"/var": {"type": "dir"},
+				"/var/log": {"type": "dir"},
+				"/var/log/syslog": {
+					"type": "file",
+					"group": "adm",
+					"mode": "640",
+					"content": "Oct 29 11:58:02 ronin-box systemd[1]: Started Lab session.\n"
+				},
+				"/root": {"type": "dir", "mode": "700"},
+				"/root/secreto.txt": {"type": "file", "mode": "600", "content": "Solo root puede leer esto.\n"},
 				"/home": {"type": "dir"},
+				"/home/ronin/herramientas": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/herramientas/escaneo.sh": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "644",
+					"content": "#!/bin/bash\n# Script de ejemplo: tiene permiso de lectura pero NO de ejecución.\necho \"escaneando...\"\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe\n\nPendiente de completar.\n"
+				},
 				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
 				"/home/ronin/nota.txt": {
 					"type": "file",
