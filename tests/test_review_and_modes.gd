@@ -31,11 +31,31 @@ const SOLUTIONS := {
 		"revisar",
 	],
 	"r_interpretacion": ["curl app02:8080", "curl app02:8081"],
+	"r_cabeceras": ["curl -I portal01:8080"],
+	"r_cookies": [
+		"curl -i -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso",
+		"curl -b 'sid=ses-cli1-77b2' portal01:8080/mi-cuenta",
+	],
+	"r_control_acceso": [
+		"curl -c jar.txt -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso",
+		"curl -b jar.txt 'portal01:8080/factura?num=301'",
+		"curl -b jar.txt 'portal01:8080/factura?num=302'",
+		"curl -b 'perfil=gestor' portal01:8080/gestion",
+	],
 }
 
 
+## El laboratorio de un reto: el suyo propio ("lab" en la misión) o el del libro.
+func _lab_of(mission_id: String) -> String:
+	var book: Dictionary = MissionLoader.load_file(REVIEW_BOOK)["book"]
+	for mission: Dictionary in book["missions"]:
+		if mission["id"] == mission_id:
+			return "res://data/labs/%s.json" % mission.get("lab", book["lab"])
+	return REVIEW_LAB
+
+
 func _review_game(mission_id: String) -> Dictionary:
-	var world = LabLoader.load_file(REVIEW_LAB)["world"]
+	var world = LabLoader.load_file(_lab_of(mission_id))["world"]
 	var book: Dictionary = MissionLoader.load_file(REVIEW_BOOK)["book"]
 	var engine := MissionEngine.new(MissionEngine.single_mission_book(book, mission_id))
 	var tracker := MissionTracker.new(engine)
@@ -53,27 +73,32 @@ func _play(game: Dictionary, lines: Array) -> void:
 
 func test_los_datos_de_repaso_son_validos() -> void:
 	assert_eq(LabLoader.load_file(REVIEW_LAB)["errors"], [])
+	assert_eq(LabLoader.load_file("res://data/labs/repaso_web.json")["errors"], [])
 	assert_eq(MissionLoader.load_file(REVIEW_BOOK)["errors"], [])
 
 
 func test_cada_reto_de_repaso_apunta_a_un_concepto_que_se_aprende_en_las_misiones() -> void:
 	var main_concepts := {}
-	for mission: Dictionary in MissionLoader.load_file(MAIN_BOOK)["book"]["missions"]:
-		for objective: Dictionary in mission["objectives"]:
-			main_concepts[objective["concept"]] = true
+	for path in [MAIN_BOOK, "res://data/missions/tienda_web.json"]:
+		for mission: Dictionary in MissionLoader.load_file(path)["book"]["missions"]:
+			for objective: Dictionary in mission["objectives"]:
+				main_concepts[objective["concept"]] = true
 	for mission: Dictionary in MissionLoader.load_file(REVIEW_BOOK)["book"]["missions"]:
 		assert_true(main_concepts.has(mission["concept"]), "%s repasa '%s', que no se enseña en las misiones" % [mission["id"], mission["concept"]])
 		assert_true(SOLUTIONS.has(mission["id"]), "falta la solución de prueba de %s" % mission["id"])
 
 
-func test_el_laboratorio_de_repaso_es_otra_red() -> void:
-	var main = LabLoader.load_file("res://data/labs/primer_contacto.json")["world"]
-	var review = LabLoader.load_file(REVIEW_LAB)["world"]
-	for ip in review.host_ips():
-		assert_false(main.hosts.has(ip), "%s existe en los dos laboratorios: no sería un escenario nuevo" % ip)
-	for host in review.hosts.values():
-		assert_false(main.host_by_name(host.hostname) != null, "el nombre %s se repite" % host.hostname)
-
+func test_los_laboratorios_de_repaso_son_otras_redes() -> void:
+	var originals: Array = []
+	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json"]:
+		originals.append(LabLoader.load_file(path)["world"])
+	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json"]:
+		var review = LabLoader.load_file(path)["world"]
+		for original in originals:
+			for ip in review.host_ips():
+				assert_false(original.hosts.has(ip), "%s existe también en el laboratorio original: no sería un escenario nuevo" % ip)
+			for host in review.hosts.values():
+				assert_false(original.host_by_name(host.hostname) != null, "el nombre %s se repite" % host.hostname)
 
 # --- Cada reto se puede resolver ---
 
@@ -272,3 +297,38 @@ func test_las_nuevas_ordenes_tienen_ficha_y_aparecen_en_help() -> void:
 	for command in ["modo", "reiniciar", "repaso"]:
 		assert_true(game["session"].run("%s --help" % command).stdout.begins_with("Uso: "), "%s --help" % command)
 		assert_true(command in game["session"].run("help").stdout)
+
+
+# --- Repasos web: otro portal, otros nombres ---
+
+func test_las_respuestas_de_la_tienda_no_resuelven_el_repaso_del_portal() -> void:
+	var cookies := _review_game("r_cookies")
+	_play(cookies, ["curl -i -d 'usuario=demo&clave=demo123' portal01:8080/acceso"])
+	assert_false(cookies["engine"].is_finished(), "la cuenta de la tienda no vale en el portal")
+	var access := _review_game("r_control_acceso")
+	_play(access, ["curl -b 'session=tok-demo-3f9a1c' 'portal01:8080/factura?num=302'", "curl -b 'rol=admin' portal01:8080/gestion"])
+	assert_false(access["engine"].is_finished(), "ni el nombre de la cookie ni las rutas son los mismos")
+
+
+func test_el_repaso_de_acceso_exige_la_secuencia_correcta() -> void:
+	var game := _review_game("r_control_acceso")
+	_play(game, ["curl -b 'sid=ses-cli1-77b2' 'portal01:8080/factura?num=302'"])
+	assert_eq(game["engine"].status_of("r_acc_ajena"), "pending", "antes hay que pedir la propia (el orden importa)")
+	_play(game, ["curl -b 'sid=ses-cli1-77b2' 'portal01:8080/factura?num=301'", "curl -b 'sid=ses-cli1-77b2' 'portal01:8080/factura?num=302'"])
+	assert_eq(game["engine"].status_of("r_acc_ajena"), "done")
+	assert_eq(game["engine"].status_of("r_acc_gestion"), "pending")
+
+
+func test_las_cabeceras_del_portal_son_distintas() -> void:
+	var game := _review_game("r_cabeceras")
+	var out: String = game["session"].run("curl -I portal01:8080").stdout
+	assert_true("X-Frame-Options: SAMEORIGIN" in out and "Server: Apache/2.4.41 (Ubuntu)" in out)
+	assert_false("nginx" in out, "no es el servidor de la tienda")
+
+
+func test_los_repasos_web_cuelgan_de_conceptos_de_la_tienda() -> void:
+	var game := _controller_game()
+	for concept in ["cabeceras_http", "cookies_sesiones", "control_acceso"]:
+		assert_false(game["controller"].review_mission_for(concept).is_empty(), "hay un reto de %s" % concept)
+	game["controller"].scheduler.schedule("cookies_sesiones", "solucion", NOW - DAY)
+	assert_eq(game["controller"].due_reviews(), ["cookies_sesiones"], "lo aprendido en la tienda se ofrece como repaso")

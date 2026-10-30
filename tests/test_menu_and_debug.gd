@@ -314,3 +314,19 @@ func test_f11_abre_el_panel_de_pruebas_y_cierra_las_demas_ventanas() -> void:
 	assert_false(root.debug_panel.is_open())
 	assert_true(root.terminal.typing_enabled)
 	_dispose(root)
+
+
+func test_los_repasos_de_la_tienda_llevan_al_portal_y_vuelven() -> void:
+	var root := _main()
+	assert_true("Repaso: cookies sesiones" in root.debug_panel.button_texts())
+	root.debug_panel.press("Misión 2: Sesiones y cookies")
+	root.debug_panel.press("Repaso: cookies sesiones")
+	assert_eq(root.controller.mode, "repaso")
+	assert_eq(root.session.host.hostname, "audit-portal")
+	assert_true("REPASO: COOKIES SESIONES" in root.terminal.output_text())
+	root.terminal.submit("curl -i -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso")
+	root.terminal.submit("curl -b 'sid=ses-cli1-77b2' portal01:8080/mi-cuenta")
+	assert_eq(root.controller.mode, "mision", "al completar el reto se vuelve solo")
+	assert_eq(root.active_book, "tienda_web")
+	assert_eq(root.session.host.hostname, "audit-web", "a la tienda donde estabas")
+	_dispose(root)

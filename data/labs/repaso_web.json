@@ -1,0 +1,112 @@
+{
+	"id": "repaso_web",
+	"title": "Repaso: portal de clientes",
+	"cidr": "10.0.3.0/24",
+	"player_host": "10.0.3.2",
+	"hosts": [
+		{
+			"ip": "10.0.3.2",
+			"hostname": "audit-portal",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/hosts": {
+					"type": "file",
+					"content": "127.0.0.1 localhost\n10.0.3.2 audit-portal\n10.0.3.10 portal01\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "Auditoría autorizada del portal de clientes de ejemplo.\nAlcance: solo portal01 (10.0.3.10), puerto 8080.\nCuenta de pruebas facilitada por el cliente: usuario cliente1, clave prueba456.\nTodos los datos son de prueba.\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.3.10",
+			"hostname": "portal01",
+			"os": "Linux",
+			"services": [
+				{"port": 8080, "state": "open", "name": "http", "product": "Apache httpd", "version": "2.4.41", "banner": "Apache/2.4.41 (Ubuntu)"}
+			],
+			"sites": {
+				"8080": {
+					"server": "Apache/2.4.41 (Ubuntu)",
+					"routes": {
+						"/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html", "X-Powered-By": "Express", "X-Frame-Options": "SAMEORIGIN"},
+							"body": "<html>\n<head><title>Portal de clientes</title></head>\n<body><h1>Portal de clientes</h1><a href=\"/acceso\">Acceder</a></body>\n</html>\n"
+						},
+						"/acceso": {
+							"variants": [
+								{
+									"when": {"method": "POST", "form": {"usuario": "cliente1", "clave": "prueba456"}},
+									"status": 302,
+									"headers": {"Location": "/mi-cuenta"},
+									"set_cookies": ["sid=ses-cli1-77b2; Path=/; HttpOnly", "perfil=cliente; Path=/"],
+									"body": ""
+								},
+								{"when": {"method": "POST"}, "status": 401, "headers": {"Content-Type": "text/html"}, "body": "<html><body>Credenciales no válidas.</body></html>\n"},
+								{"status": 200, "headers": {"Content-Type": "text/html"}, "body": "<html><body><form method=\"POST\" action=\"/acceso\"><input name=\"usuario\"><input name=\"clave\" type=\"password\"></form></body></html>\n"}
+							]
+						},
+						"/mi-cuenta": {
+							"variants": [
+								{
+									"when": {"cookies": {"sid": "ses-cli1-77b2"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Cuenta de cliente1 (datos de prueba).</body></html>\n"
+								},
+								{"status": 302, "headers": {"Location": "/acceso"}, "body": ""}
+							]
+						},
+						"/factura": {
+							"variants": [
+								{
+									"when": {"cookies": {"sid": "ses-cli1-77b2"}, "query": {"num": "301"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Factura 301 (cliente1): 1 x Licencia, 120 EUR.</body></html>\n"
+								},
+								{
+									"when": {"cookies": {"sid": "ses-cli1-77b2"}, "query": {"num": "302"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Factura 302 (cliente2, datos de prueba): 3 x Soporte, 450 EUR. Dirección: Avenida Ejemplo 12.</body></html>\n"
+								},
+								{"when": {"cookies": {"sid": "ses-cli1-77b2"}}, "status": 404, "headers": {"Content-Type": "text/html"}, "body": "<html><body>Factura no encontrada.</body></html>\n"},
+								{"status": 302, "headers": {"Location": "/acceso"}, "body": ""}
+							]
+						},
+						"/gestion": {
+							"variants": [
+								{
+									"when": {"cookies": {"perfil": "gestor"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Panel de gestión: 2 clientes, 4 facturas (datos de prueba).</body></html>\n"
+								},
+								{"status": 403, "headers": {"Content-Type": "text/html"}, "body": "<html><body>Acceso restringido a gestores.</body></html>\n"}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

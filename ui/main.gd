@@ -632,14 +632,15 @@ func _switch_to(new_world: RefCounted, new_tracker: RefCounted, lines: Array) ->
 func _start_review(concept: String) -> void:
 	var mission: Dictionary = controller.review_mission_for(concept)
 	var single := MissionEngine.single_mission_book(review_book, mission.get("id", ""))
-	var loaded := LabLoader.load_file(_lab_path(review_book.get("lab", "")))
+	var review_lab: String = mission.get("lab", review_book.get("lab", ""))   # cada reto puede usar su propio laboratorio
+	var loaded := LabLoader.load_file(_lab_path(review_lab))
 	if single.is_empty() or loaded["world"] == null:
 		controller.mode = "mision"
 		terminal.print_text("No se pudo preparar el reto de repaso.", Palette.DANGER)
 		return
 	_review_engine = MissionEngine.new(single)
 	mission_engine = _review_engine
-	_active_lab_path = _lab_path(review_book["lab"])
+	_active_lab_path = _lab_path(review_lab)
 	var review_tracker := MissionTracker.new(_review_engine)
 	review_tracker.quiet_mission_end = true
 	_switch_to(loaded["world"], review_tracker, [

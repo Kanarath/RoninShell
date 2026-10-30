@@ -241,6 +241,112 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_cabeceras",
+			"concept": "cabeceras_http",
+			"lab": "repaso_web",
+			"title": "Repaso: cabeceras",
+			"briefing": "Otro sitio, otras cabeceras. Revisa qué cuenta el portal sobre sí mismo y qué defensas tiene o le faltan. Esta vez no todo falta: fíjate en lo que sí hay.",
+			"objectives": [
+				{
+					"id": "r_cab_ver",
+					"text": "Pide las cabeceras de la portada del portal de clientes (portal01) y revisa qué cuentan y qué defensas hay o faltan",
+					"short": "Revisa las cabeceras del portal",
+					"concept": "cabeceras_http",
+					"check": {"event": "headers_seen", "where": {"ip": "10.0.3.10", "path": "/"}},
+					"hints": [
+						"Este portal no usa el puerto 80: tendrás que indicar el puerto en la dirección.",
+						"Con curl puedes pedir solo las cabeceras (mira `curl --help`).",
+						"`curl -I portal01:8080`: Server y X-Powered-By cuentan versiones; X-Frame-Options sí está esta vez, pero siguen faltando Content-Security-Policy y Strict-Transport-Security."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_cookies",
+			"concept": "cookies_sesiones",
+			"lab": "repaso_web",
+			"title": "Repaso: cookies y sesiones",
+			"briefing": "El portal de clientes tiene su propia cuenta de pruebas, que está en la nota del cliente. Comprueba cómo mantiene la sesión y qué banderas lleva cada cookie. El nombre de la cookie ya no es el mismo.",
+			"objectives": [
+				{
+					"id": "r_cook_login",
+					"text": "Inicia sesión con la cuenta de pruebas y mira las cookies que entrega y sus banderas (usa -i)",
+					"short": "Inicia sesión y mira las cookies",
+					"concept": "cookies_sesiones",
+					"check": {"all": [
+						{"event": "http_response", "where": {"ip": "10.0.3.10", "path": "/acceso", "method": "POST", "status": 302}},
+						{"event": "cookie_set", "where": {"name": "sid"}},
+						{"event": "headers_seen", "where": {"ip": "10.0.3.10", "path": "/acceso"}}
+					]},
+					"hints": [
+						"La cuenta de pruebas está en la nota del cliente, en tu directorio personal. El formulario se envía por POST.",
+						"Envía usuario y clave con la opción de datos de curl y muestra las cabeceras para ver Set-Cookie.",
+						"`curl -i -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso`: la cookie `sid` lleva HttpOnly pero no Secure, y `perfil` no lleva ninguna bandera."
+					]
+				},
+				{
+					"id": "r_cook_reuse",
+					"text": "Reutiliza la sesión para pedir tu cuenta (/mi-cuenta) enviando la cookie que te dieron",
+					"short": "Reutiliza la sesión",
+					"concept": "cookies_sesiones",
+					"requires": ["r_cook_login"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.3.10", "path": "/mi-cuenta", "status": 200, "with_cookie": true}},
+					"hints": [
+						"El servidor sabe quién eres porque tu cliente le devuelve la cookie en cada petición.",
+						"Hay una opción de curl para enviar cookies (texto o archivo).",
+						"`curl -b 'sid=ses-cli1-77b2' portal01:8080/mi-cuenta` (el valor lo viste en Set-Cookie)."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_control_acceso",
+			"concept": "control_acceso",
+			"lab": "repaso_web",
+			"title": "Repaso: control de acceso",
+			"briefing": "Estar identificado no es estar autorizado. Con la cuenta de pruebas del portal, comprueba si decide bien qué puedes ver. Todo son datos de prueba. Cambian los nombres: ahora son facturas, no pedidos.",
+			"objectives": [
+				{
+					"id": "r_acc_propia",
+					"text": "Pide tu factura de prueba (la 301) con tu sesión",
+					"short": "Pide tu factura (la 301)",
+					"concept": "control_acceso",
+					"check": {"event": "http_response", "where": {"ip": "10.0.3.10", "path": "/factura", "status": 200, "with_cookie": true}, "contains": {"query": ["num=301"]}},
+					"hints": [
+						"Primero necesitas una sesión: la cuenta de pruebas está en la nota del cliente.",
+						"Inicia sesión guardando la cookie, y pide /factura con el parámetro num=301 enviándola.",
+						"`curl -c jar.txt -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso` y luego `curl -b jar.txt 'portal01:8080/factura?num=301'`."
+					]
+				},
+				{
+					"id": "r_acc_ajena",
+					"text": "Comprueba si tu cuenta puede ver la factura 302, que pertenece a otro cliente de prueba",
+					"short": "¿Se ve una factura que no es tuya?",
+					"concept": "control_acceso",
+					"requires": ["r_acc_propia"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.3.10", "path": "/factura", "status": 200, "with_cookie": true}, "contains": {"query": ["num=302"]}},
+					"hints": [
+						"Un servidor bien hecho comprueba que cada recurso pertenece a quien lo pide.",
+						"Con tu sesión, pide un identificador distinto del tuyo y mira si lo rechaza.",
+						"`curl -b jar.txt 'portal01:8080/factura?num=302'`: si devuelve la factura de otra persona, falta la comprobación de propietario."
+					]
+				},
+				{
+					"id": "r_acc_gestion",
+					"text": "Comprueba si el acceso a /gestion depende de un dato que controlas tú (por ejemplo, una cookie)",
+					"short": "¿/gestion se decide con datos del cliente?",
+					"concept": "control_acceso",
+					"requires": ["r_acc_propia"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.3.10", "path": "/gestion", "status": 200}},
+					"hints": [
+						"Los permisos deberían decidirse con datos que guarda el servidor, no con algo que viaja en tus peticiones.",
+						"El login te dio una cookie que parece describir un perfil. Prueba /gestion tal cual y luego con ese dato cambiado.",
+						"`curl -i portal01:8080/gestion` (403) y después `curl -b 'perfil=gestor' portal01:8080/gestion`: si cambia el resultado, el servidor se fía de un dato del cliente."
+					]
+				}
+			]
 		}
 	]
 }
