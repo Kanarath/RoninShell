@@ -19,7 +19,7 @@ Siguiente: modo libre, repaso espaciado, más laboratorios y pentesting web. El 
 
 ## Probar el juego
 
-Abre la carpeta con Godot 4.7 y pulsa F5. Escribe directamente (no hace falta pulsar Enter antes). Empieza con `mision` y `help`. `F2` enciende o apaga el VFX. El diseño visual de referencia está en `docs/reference/`. Para empezar de cero, borra el archivo de progreso de la carpeta de datos de la app.
+Abre la carpeta con Godot 4.7 y pulsa F5. Escribe directamente (no hace falta pulsar Enter antes). Empieza con `mision` y `help`. `F1` abre la chuleta de comandos, `F10` los ajustes (efectos, tamaño de letra, alto contraste, mascota y aviso de descanso) y `F2` enciende o apaga el VFX. `Esc` cierra cualquier ventana. El diseño visual de referencia está en `docs/reference/`. Para empezar de cero, borra el archivo de progreso de la carpeta de datos de la app.
 
 ## Ejecutar los tests
 

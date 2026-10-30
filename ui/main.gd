@@ -15,6 +15,11 @@ const MissionLoader := preload("res://engine/missions/mission_loader.gd")
 const MissionEngine := preload("res://engine/missions/mission_engine.gd")
 const MissionTracker := preload("res://engine/missions/mission_tracker.gd")
 const SaveStore := preload("res://game/save_store.gd")
+const Settings := preload("res://game/settings.gd")
+const SettingsStore := preload("res://game/settings_store.gd")
+const BreakReminder := preload("res://game/break_reminder.gd")
+const CheatsheetPanel := preload("res://ui/widgets/cheatsheet_panel.gd")
+const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
@@ -31,6 +36,11 @@ var persist := true
 
 var mascot := Mascot.new()
 var network_map: Control = null
+var settings: RefCounted = Settings.new()
+var cheatsheet_panel := CheatsheetPanel.new()
+var settings_panel := SettingsPanel.new()
+var break_reminder := BreakReminder.new()
+var _settings_store := SettingsStore.new()
 var _overlay := ColorRect.new()
 var _store := SaveStore.new()
 var _mission_label := Label.new()
@@ -48,11 +58,16 @@ func _ready() -> void:
 		push_error("No se pudo cargar el laboratorio: %s" % str(result["errors"]))
 	world = result["world"]
 
+	if persist:
+		settings = _settings_store.load_settings()
+
 	_build_background()
 	_build_layout()
+	_build_modals()
 	_build_overlay()
 	_start_session()
 	_refresh_missions()
+	_apply_settings()
 
 	var demo_commands: Array = []
 	var screenshot_path := ""
@@ -61,16 +76,88 @@ func _ready() -> void:
 			demo_commands = arg.trim_prefix("--run=").split("~~")
 		elif arg.begins_with("--screenshot="):
 			screenshot_path = arg.trim_prefix("--screenshot=")
+		elif arg == "--open=cheatsheet":
+			cheatsheet_panel.open()
+		elif arg == "--open=settings":
+			settings_panel.open()
 	for command: String in demo_commands:
 		terminal.submit(command)
 	if screenshot_path != "":
 		_capture_and_quit(screenshot_path)
 
 
+## Esc cierra cualquier ventana abierta (se mira antes que los controles, que a veces se lo comen).
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		if cheatsheet_panel.is_open() or settings_panel.is_open():
+			cheatsheet_panel.close()
+			settings_panel.close()
+			get_viewport().set_input_as_handled()
+
+
+## F1 chuleta, F10 ajustes, F2 efectos.
 func _unhandled_input(event: InputEvent) -> void:
-	# F2 apaga o enciende el VFX (ajuste de accesibilidad: más adelante irá en opciones).
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
-		_overlay.visible = not _overlay.visible
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	match event.keycode:
+		KEY_F1:
+			settings_panel.close()
+			cheatsheet_panel.toggle()
+		KEY_F10:
+			cheatsheet_panel.close()
+			settings_panel.toggle()
+		KEY_F2:
+			settings.vfx_enabled = not settings.vfx_enabled
+			settings_panel.apply(settings)
+			_apply_settings()
+			_save_settings()
+
+
+## Aviso de descanso: cuenta tiempo de juego y avisa con suavidad, sin bloquear nada.
+func _process(delta: float) -> void:
+	if break_reminder.tick(delta):
+		terminal.print_text("Llevas %d minutos seguidos. Una pausa corta (agua, estirar, mirar lejos) ayuda a seguir con la cabeza clara. Puedes ignorar este aviso o apagarlo con F10." % break_reminder.interval_minutes, Palette.GOLD)
+		mascot.react("think", 5.0)
+
+
+func _build_modals() -> void:
+	for panel in [cheatsheet_panel, settings_panel]:
+		add_child(panel)
+		panel.opened.connect(_on_modal_changed)
+		panel.closed.connect(_on_modal_changed)
+	settings_panel.changed.connect(_on_settings_changed)
+
+
+## Mientras hay una ventana abierta, el teclado es suyo; al cerrarla, vuelve a la terminal.
+func _on_modal_changed() -> void:
+	var any_open: bool = cheatsheet_panel.is_open() or settings_panel.is_open()
+	terminal.typing_enabled = not any_open
+	if any_open:
+		terminal.input.release_focus()
+	else:
+		terminal.focus_input()
+
+
+func _on_settings_changed(new_settings: RefCounted) -> void:
+	settings = new_settings
+	_apply_settings()
+	_save_settings()
+
+
+func _save_settings() -> void:
+	if persist:
+		_settings_store.save(settings)
+
+
+func _apply_settings() -> void:
+	_overlay.visible = settings.vfx_enabled
+	(_overlay.material as ShaderMaterial).set_shader_parameter("intensity", settings.vfx_intensity)
+	terminal.set_font_size(settings.font_size)
+	terminal.set_high_contrast(settings.high_contrast)
+	mascot.visible = settings.mascot_enabled
+	break_reminder.enabled = settings.break_enabled
+	break_reminder.interval_minutes = settings.break_minutes
+	settings_panel.apply(settings)
 
 
 # --- Sesión y misiones --------------------------------------------------------
@@ -286,7 +373,7 @@ func _build_top_bar() -> Control:
 	brand.add_child(_build_xp_bar())
 
 	var hint := Label.new()
-	hint.text = "F2  efectos"
+	hint.text = "F1  chuleta   F10  ajustes   F2  efectos"
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

@@ -12,8 +12,12 @@ const Completer := preload("res://engine/shell/completer.gd")
 const HistoryNavigator := preload("res://engine/shell/history_navigator.gd")
 
 const FONT_SIZE := 17
+const HIGH_CONTRAST_TEXT := Color("f4fffb")
 
 var session: RefCounted = null
+## Si es false, las teclas no se desvían a la línea de comandos (p. ej. mientras hay un menú abierto).
+var typing_enabled := true
+var font_size := FONT_SIZE
 var output := RichTextLabel.new()
 var input := LineEdit.new()
 var prompt_label := Label.new()
@@ -99,14 +103,32 @@ func submit(line: String) -> void:
 
 ## Pone el cursor en la línea de comandos, listo para escribir.
 func focus_input() -> void:
+	if not typing_enabled:
+		return
 	input.grab_focus()
 	input.edit()
+
+
+## Cambia el tamaño de letra de toda la terminal (salida, prompt y línea de entrada).
+func set_font_size(new_size: int) -> void:
+	font_size = new_size
+	output.add_theme_font_size_override("normal_font_size", new_size)
+	output.add_theme_font_size_override("bold_font_size", new_size)
+	prompt_label.add_theme_font_size_override("font_size", new_size)
+	input.add_theme_font_size_override("font_size", new_size)
+
+
+## Alto contraste: texto casi blanco, para quien necesita más diferencia con el fondo.
+func set_high_contrast(enabled: bool) -> void:
+	var color: Color = HIGH_CONTRAST_TEXT if enabled else Palette.TEXT
+	output.add_theme_color_override("default_color", color)
+	input.add_theme_color_override("font_color", color)
 
 
 ## Cualquier tecla que no haya consumido otro control va a la línea de comandos, como en una
 ## terminal real: no hace falta hacer clic ni pulsar Enter antes de escribir.
 func _unhandled_key_input(event: InputEvent) -> void:
-	if session == null or not (event is InputEventKey) or not event.pressed or input.has_focus():
+	if session == null or not typing_enabled or not (event is InputEventKey) or not event.pressed or input.has_focus():
 		return
 	var key := event as InputEventKey
 	var is_text := key.unicode >= 32 and key.unicode != 127 and not key.ctrl_pressed and not key.alt_pressed and not key.meta_pressed

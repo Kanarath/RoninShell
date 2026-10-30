@@ -14,6 +14,9 @@ var title: String = "":
 			_title_label.text = value.to_upper()
 
 var content := VBoxContainer.new()
+## Opacidad del relleno. Los paneles de la pantalla principal son algo translúcidos (se intuye el
+## kanji de fondo); las ventanas modales usan 1.0 para que nada se cuele por detrás del texto.
+var fill_alpha := 0.82
 var _title_label := Label.new()
 
 
@@ -48,7 +51,7 @@ func _draw() -> void:
 		Vector2(s.x - CUT, s.y), Vector2(0, s.y), Vector2(0, CUT),
 	])
 	# Algo translúcido para que el kanji de fondo se intuya detrás sin molestar a la lectura.
-	draw_colored_polygon(outline, Color(Palette.PANEL, 0.82))
+	draw_colored_polygon(outline, Color(Palette.PANEL, fill_alpha))
 	draw_polyline(outline + PackedVector2Array([outline[0]]), Palette.TEAL_BORDER, 1.5, true)
 
 	# Cortes diagonales y remates en oro: la "firma" visual de los marcos.

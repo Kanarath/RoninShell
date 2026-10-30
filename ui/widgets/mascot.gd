@@ -27,8 +27,8 @@ func react(new_state: String, seconds := 2.5) -> void:
 	if not new_state in STATES:
 		return
 	_show(new_state)
-	if new_state == "idle":
-		_timer.stop()
+	if new_state == "idle" or not is_inside_tree():
+		_timer.stop() if is_inside_tree() else null
 	else:
 		_timer.start(seconds)
 
