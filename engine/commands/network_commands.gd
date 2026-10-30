@@ -13,10 +13,10 @@ const Network := preload("res://engine/network.gd")
 const Host := preload("res://engine/host.gd")
 const Vfs := preload("res://engine/vfs.gd")
 const ArgParser := preload("res://engine/commands/arg_parser.gd")
+const CurlCommand := preload("res://engine/commands/curl_command.gd")
 
 const NMAP_VERSION := "7.94"
 const SCAN_DATE := "2026-10-29 12:00 UTC"
-const HTTP_DATE := "Thu, 29 Oct 2026 12:00:00 GMT"
 const COLLAPSE_THRESHOLD := 25
 const HIGH_PORTS := [1433, 1521, 2049, 3000, 3306, 3389, 5000, 5432, 5900, 6379, 8000, 8080, 8443, 8888, 9000, 9200, 27017]
 const WELL_KNOWN := {
@@ -24,18 +24,12 @@ const WELL_KNOWN := {
 	139: "netbios-ssn", 143: "imap", 443: "https", 445: "microsoft-ds", 3306: "mysql",
 	3389: "ms-wbt-server", 5432: "postgresql", 8080: "http-proxy",
 }
-const STATUS_TEXT := {
-	200: "OK", 301: "Moved Permanently", 302: "Found", 303: "See Other", 307: "Temporary Redirect",
-	308: "Permanent Redirect", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
-	404: "Not Found", 500: "Internal Server Error",
-}
-const NOT_FOUND_BODY := "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html><head>\n<title>404 Not Found</title>\n</head><body>\n<h1>Not Found</h1>\n<p>The requested URL was not found on this server.</p>\n</body></html>\n"
 
 
 func register_all(registry: RefCounted) -> void:
 	registry.register("ping", "Comprueba si un host responde (-c N)", _ping)
 	registry.register("nmap", "Escanea hosts y puertos (-sn -sV -Pn -p)", _nmap)
-	registry.register("curl", "Hace una petición HTTP (-i -I -v -L -o)", _curl)
+	registry.register("curl", "Hace una petición HTTP (-i -I -v -L -X -d -H -b -c -o)", CurlCommand.new().run)
 
 
 # =============================================================================
@@ -417,146 +411,3 @@ func _port_table(rows: Array, version_scan: bool) -> String:
 	return "\n".join(lines) + "\n"
 
 
-# =============================================================================
-# curl
-# =============================================================================
-
-func _curl(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
-	var parsed := ArgParser.parse(args, "iIsSvLk", "o")
-	if parsed["error"] != "":
-		var letter: String = parsed["error"].get_slice("'", 1)
-		return CommandResult.error("curl: option -%s: is not supported by this lab\ncurl: try 'curl --help' for more information" % letter, 2)
-	if parsed["rest"].is_empty():
-		return CommandResult.error("curl: no URL specified\ncurl: try 'curl --help' for more information", 2)
-	var flags: Dictionary = parsed["flags"]
-	var result := CommandResult.new()
-	var url: String = parsed["rest"][0]
-	var hops := 0
-	var last_response: Dictionary = {}
-
-	while true:
-		var fetched := _fetch(session, url, flags.has("v"))
-		result.stderr += fetched["verbose"]
-		if fetched["error"] != "":
-			if fetched["code"] == 7:
-				session.record("connection_refused", {"ip": fetched.get("ip", ""), "port": fetched.get("port", 0)})
-			elif fetched["code"] == 28:
-				session.record("connection_timeout", {"ip": fetched.get("ip", ""), "port": fetched.get("port", 0)})
-			if not flags.has("s") or flags.has("S"):
-				result.stderr += fetched["error"] + "\n"
-			result.exit_code = fetched["code"]
-			return result
-		last_response = fetched
-		session.record("http_response", {"ip": fetched["ip"], "port": fetched["port"], "path": fetched["path"], "status": fetched["status"]})
-		if flags.has("i") or flags.has("I"):
-			result.stdout += _header_block(fetched)
-		var is_redirect: bool = fetched["status"] in [301, 302, 303, 307, 308] and fetched["headers"].has("Location")
-		if flags.has("L") and is_redirect and hops < 10:
-			hops += 1
-			url = _absolute_location(fetched, str(fetched["headers"]["Location"]))
-			continue
-		break
-
-	if flags.has("I"):
-		return result
-	if parsed["values"].has("o"):
-		var target: String = Vfs.normalize(session.cwd, parsed["values"]["o"])
-		var fs = session.host.fs
-		var allowed: bool = fs.is_dir(target.get_base_dir()) and fs.check_access(target.get_base_dir(), session.user, "w") and not fs.is_dir(target)
-		if not allowed:
-			result.stderr += "curl: (23) Failure writing output to destination\n"
-			result.exit_code = 23
-			return result
-		fs.write_file(target, last_response["body"], false, session.user["name"], session.user["name"])
-		return result
-	result.stdout += last_response["body"]
-	return result
-
-
-## Hace una petición simulada. Devuelve {error, code, status, headers, body, ...}.
-func _fetch(session: RefCounted, url: String, verbose: bool) -> Dictionary:
-	var failure := {"error": "", "code": 0, "verbose": ""}
-	var pattern := RegEx.create_from_string("^(?:([a-zA-Z][a-zA-Z0-9+.\\-]*)://)?([^/:?#]+)(?::(\\d+))?([/?][^#]*)?(?:#.*)?$")
-	var found := pattern.search(url)
-	if found == null:
-		failure["error"] = "curl: (3) URL rejected: Bad hostname"
-		failure["code"] = 3
-		return failure
-	var scheme: String = found.get_string(1) if found.get_string(1) != "" else "http"
-	if not scheme in ["http", "https"]:
-		failure["error"] = "curl: (1) Protocol \"%s\" not supported or disabled in libcurl" % scheme
-		failure["code"] = 1
-		return failure
-	var host_text: String = found.get_string(2)
-	var port := int(found.get_string(3)) if found.get_string(3) != "" else (443 if scheme == "https" else 80)
-	var path_and_query: String = found.get_string(4) if found.get_string(4) != "" else "/"
-	if path_and_query.begins_with("?"):
-		path_and_query = "/" + path_and_query
-	var path: String = path_and_query.get_slice("?", 0)
-
-	var host = Network.resolve(session.world, host_text)
-	if host == null and not Host.is_valid_ip(host_text):
-		failure["error"] = "curl: (6) Could not resolve host: %s" % host_text
-		failure["code"] = 6
-		return failure
-	var ip: String = host.ip if host != null else host_text
-	if host_text == "localhost":
-		ip = Network.LOCALHOST_IP
-
-	failure["ip"] = ip
-	failure["port"] = port
-	if verbose:
-		failure["verbose"] += "*   Trying %s:%d...\n" % [ip, port]
-	var service = host.get_service(port) if host != null else null
-	if host == null or not host.up or (service != null and service.state == "filtered"):
-		failure["error"] = "curl: (28) Failed to connect to %s port %d after 129114 ms: Connection timed out" % [host_text, port]
-		failure["code"] = 28
-		return failure
-	if service == null or service.state == "closed":
-		failure["error"] = "curl: (7) Failed to connect to %s port %d after 0 ms: Connection refused" % [host_text, port]
-		failure["code"] = 7
-		return failure
-	if verbose:
-		failure["verbose"] += "* Connected to %s (%s) port %d\n" % [host_text, ip, port]
-	if scheme == "https" and service.name != "https":
-		failure["error"] = "curl: (35) error:0A00010B:SSL routines::wrong version number"
-		failure["code"] = 35
-		return failure
-	if not host.sites.has(port):
-		failure["error"] = "curl: (52) Empty reply from server"
-		failure["code"] = 52
-		return failure
-
-	var site: Dictionary = host.sites[port]
-	var route: Dictionary = site["routes"].get(path, {})
-	var status: int = route.get("status", 404)
-	var headers: Dictionary = (route.get("headers", {"Content-Type": "text/html; charset=iso-8859-1"}) as Dictionary).duplicate()
-	var body: String = route.get("body", NOT_FOUND_BODY)
-	var response := {
-		"error": "", "code": 0, "status": status, "headers": headers, "body": body,
-		"server": site["server"], "host": host_text, "port": port, "scheme": scheme, "verbose": failure["verbose"],
-		"ip": ip, "path": path,
-	}
-	if verbose:
-		response["verbose"] += "> GET %s HTTP/1.1\n> Host: %s\n> User-Agent: curl/8.5.0\n> Accept: */*\n>\n" % [path_and_query, host_text]
-		response["verbose"] += _header_block(response).replace("\n", "\n< ").insert(0, "< ").trim_suffix("< ")
-	return response
-
-
-func _header_block(response: Dictionary) -> String:
-	var status: int = response["status"]
-	var text := "HTTP/1.1 %d %s\nDate: %s\n" % [status, STATUS_TEXT.get(status, ""), HTTP_DATE]
-	if response["server"] != "":
-		text += "Server: %s\n" % response["server"]
-	for header_name: String in response["headers"]:
-		text += "%s: %s\n" % [header_name, response["headers"][header_name]]
-	if not response["headers"].has("Content-Length"):
-		text += "Content-Length: %d\n" % (response["body"] as String).to_utf8_buffer().size()
-	return text + "\n"
-
-
-func _absolute_location(response: Dictionary, location: String) -> String:
-	if location.begins_with("http://") or location.begins_with("https://"):
-		return location
-	var port_part := "" if int(response["port"]) in [80, 443] else ":%d" % int(response["port"])
-	return "%s://%s%s%s" % [response["scheme"], response["host"], port_part, location]

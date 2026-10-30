@@ -1,0 +1,131 @@
+{
+	"id": "tienda_web",
+	"title": "Tienda web (auditoría autorizada)",
+	"cidr": "10.0.2.0/24",
+	"player_host": "10.0.2.2",
+	"hosts": [
+		{
+			"ip": "10.0.2.2",
+			"hostname": "audit-web",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/hosts": {
+					"type": "file",
+					"content": "127.0.0.1 localhost\n10.0.2.2 audit-web\n10.0.2.10 shop01\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "Auditoría autorizada de la tienda web de ejemplo.\nAlcance: solo shop01 (10.0.2.10), puerto 80.\nCuenta de pruebas facilitada por el cliente: usuario demo, clave demo123.\nNo se permite acceder a datos reales: la tienda solo contiene datos de prueba.\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.2.10",
+			"hostname": "shop01",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "8.4p1"},
+				{"port": 80, "state": "open", "name": "http", "product": "nginx", "version": "1.18.0", "banner": "nginx/1.18.0"}
+			],
+			"sites": {
+				"80": {
+					"server": "nginx/1.18.0",
+					"routes": {
+						"/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html", "X-Powered-By": "PHP/7.2.34"},
+							"body": "<html>\n<head><title>Tienda de ejemplo</title></head>\n<body>\n<h1>Tienda de ejemplo</h1>\n<a href=\"/login\">Iniciar sesión</a>\n</body>\n</html>\n"
+						},
+						"/login": {
+							"variants": [
+								{
+									"when": {"method": "POST", "form": {"usuario": "demo", "clave": "demo123"}},
+									"status": 302,
+									"headers": {"Location": "/perfil"},
+									"set_cookies": ["session=tok-demo-3f9a1c; Path=/", "rol=usuario; Path=/"],
+									"body": ""
+								},
+								{
+									"when": {"method": "POST"},
+									"status": 401,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Usuario o clave incorrectos.</body></html>\n"
+								},
+								{
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html>\n<body>\n<form method=\"POST\" action=\"/login\">\n<input name=\"usuario\"> <input name=\"clave\" type=\"password\">\n<button>Entrar</button>\n</form>\n</body>\n</html>\n"
+								}
+							]
+						},
+						"/perfil": {
+							"variants": [
+								{
+									"when": {"cookies": {"session": "tok-demo-3f9a1c"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Perfil de demo (cliente). Rol: usuario.</body></html>\n"
+								},
+								{"status": 302, "headers": {"Location": "/login"}, "body": ""}
+							]
+						},
+						"/pedido": {
+							"variants": [
+								{
+									"when": {"cookies": {"session": "tok-demo-3f9a1c"}, "query": {"id": "15"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Pedido 15 (demo): 2 x Teclado, 59 EUR.</body></html>\n"
+								},
+								{
+									"when": {"cookies": {"session": "tok-demo-3f9a1c"}, "query": {"id": "16"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Pedido 16 (cliente: marta, datos de prueba): 1 x Portátil, 899 EUR. Envío: Calle Ejemplo 4.</body></html>\n"
+								},
+								{
+									"when": {"cookies": {"session": "tok-demo-3f9a1c"}},
+									"status": 404,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Pedido no encontrado.</body></html>\n"
+								},
+								{"status": 302, "headers": {"Location": "/login"}, "body": ""}
+							]
+						},
+						"/admin": {
+							"variants": [
+								{
+									"when": {"cookies": {"rol": "admin"}},
+									"status": 200,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Panel de administración: 3 usuarios, 2 pedidos pendientes (datos de prueba).</body></html>\n"
+								},
+								{
+									"status": 403,
+									"headers": {"Content-Type": "text/html"},
+									"body": "<html><body>Acceso denegado: se requiere rol de administrador.</body></html>\n"
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

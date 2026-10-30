@@ -102,20 +102,39 @@ static func _load_sites(host: RefCounted, sites_data: Variant, errors: Array, co
 			continue
 		var routes := {}
 		for route: String in site_data["routes"]:
-			var route_data = site_data["routes"][route]
-			if not route.begins_with("/") or typeof(route_data) != TYPE_DICTIONARY:
-				errors.append("%s: ruta web inválida '%s'" % [context, route])
-				continue
-			var status := int(route_data.get("status", 200))
-			if status < 100 or status > 599:
-				errors.append("%s: código HTTP inválido %d en %s" % [context, status, route])
-				continue
-			routes[route] = {
-				"status": status,
-				"headers": route_data.get("headers", {}),
-				"body": str(route_data.get("body", "")),
-			}
+			var normalized := _normalize_route(site_data["routes"][route], route, context, errors)
+			if not normalized.is_empty():
+				routes[route] = normalized
 		host.sites[int(port_key)] = {"server": str(site_data.get("server", "")), "routes": routes}
+
+
+## Una ruta es una respuesta ({status, headers, body, set_cookies}) o una lista de "variants",
+## cada una con una condición opcional "when". Siempre se guarda como lista de variantes.
+static func _normalize_route(route_data: Variant, route: String, context: String, errors: Array) -> Array:
+	if not route.begins_with("/") or typeof(route_data) != TYPE_DICTIONARY:
+		errors.append("%s: ruta web inválida '%s'" % [context, route])
+		return []
+	var raw_variants: Array = route_data["variants"] if route_data.has("variants") and typeof(route_data["variants"]) == TYPE_ARRAY else [route_data]
+	var variants: Array = []
+	for raw in raw_variants:
+		if typeof(raw) != TYPE_DICTIONARY:
+			errors.append("%s: variante inválida en %s" % [context, route])
+			return []
+		var status := int(raw.get("status", 200))
+		if status < 100 or status > 599:
+			errors.append("%s: código HTTP inválido %d en %s" % [context, status, route])
+			return []
+		var cookies: Array = []
+		for cookie in raw.get("set_cookies", []):
+			cookies.append(str(cookie))
+		variants.append({
+			"status": status,
+			"headers": raw.get("headers", {}),
+			"body": str(raw.get("body", "")),
+			"set_cookies": cookies,
+			"when": raw.get("when", {}),
+		})
+	return variants
 
 
 static func _load_filesystem(host: RefCounted, fs_data: Variant, errors: Array, context: String) -> void:

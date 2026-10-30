@@ -225,7 +225,7 @@ func test_curl_silencioso_y_opciones_no_soportadas() -> void:
 	var s := _s()
 	assert_eq(s.run("curl -s web01:81").stderr, "", "-s oculta el mensaje de error")
 	assert_eq(s.run("curl -s web01:81").exit_code, 7, "pero el código de salida sigue ahí")
-	assert_true("not supported by this lab" in s.run("curl -H x web01").stderr)
+	assert_true("not supported by this lab" in s.run("curl -F x web01").stderr)
 	assert_true("no URL specified" in s.run("curl").stderr)
 
 
