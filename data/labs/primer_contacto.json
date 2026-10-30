@@ -79,7 +79,37 @@
 				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "8.2p1", "banner": "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5"},
 				{"port": 80, "state": "open", "name": "http", "product": "Apache httpd", "version": "2.4.49", "banner": "Apache/2.4.49 (Unix)"},
 				{"port": 8080, "state": "filtered", "name": "http-proxy"}
-			]
+			],
+			"sites": {
+				"80": {
+					"server": "Apache/2.4.49 (Unix)",
+					"routes": {
+						"/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html"},
+							"body": "<html>\n<head><title>Intranet de ejemplo</title></head>\n<body>\n<h1>Bienvenido a la intranet</h1>\n<!-- TODO: quitar /backup/ antes de pasar a producción -->\n</body>\n</html>\n"
+						},
+						"/robots.txt": {
+							"status": 200,
+							"headers": {"Content-Type": "text/plain"},
+							"body": "User-agent: *\nDisallow: /backup/\nDisallow: /admin/\n"
+						},
+						"/admin": {"status": 403, "headers": {"Content-Type": "text/html"}, "body": "<html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1></body></html>\n"},
+						"/admin/": {"status": 403, "headers": {"Content-Type": "text/html"}, "body": "<html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1></body></html>\n"},
+						"/old": {"status": 301, "headers": {"Location": "/"}, "body": ""},
+						"/backup/": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html"},
+							"body": "<html><head><title>Index of /backup</title></head>\n<body><h1>Index of /backup</h1>\n<a href=\"config.old\">config.old</a>\n</body></html>\n"
+						},
+						"/backup/config.old": {
+							"status": 200,
+							"headers": {"Content-Type": "text/plain"},
+							"body": "db_user=app\ndb_pass=EjemploNoReal123\n"
+						}
+					}
+				}
+			}
 		},
 		{
 			"ip": "10.0.0.9",

@@ -12,7 +12,8 @@ const PROTOCOLS := ["tcp", "udp"]
 var port: int = 0
 var proto: String = "tcp"
 var state: String = "open"
-var name: String = ""      # nombre del servicio, p. ej. "http"
+var name: String = ""      # nombre REAL del servicio, p. ej. "http" (lo que ve nmap -sV)
+var guessed_name: String = ""  # lo que nmap supone solo por el número de puerto (sin -sV)
 var product: String = ""   # p. ej. "Apache httpd"
 var version: String = ""   # p. ej. "2.4.49"
 var banner: String = ""    # lo que el servicio dice de sí mismo; puede no coincidir con la realidad
@@ -41,6 +42,7 @@ static func from_dict(data: Variant, errors: Array, context: String) -> RefCount
 		errors.append("%s: estado desconocido '%s'" % [context, service.state])
 		return null
 	service.name = str(data.get("name", ""))
+	service.guessed_name = str(data.get("guessed_name", service.name))
 	service.product = str(data.get("product", ""))
 	service.version = str(data.get("version", ""))
 	service.banner = str(data.get("banner", ""))

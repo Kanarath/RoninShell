@@ -10,7 +10,8 @@ var os_name: String = "Linux"
 var up: bool = true                  # ¿está encendida?
 var responds_to_ping: bool = true    # una máquina viva puede ignorar el ping (firewall)
 var services: Array = []             # de Service
-var users: Array = []                # de {name, uid, home}
+var users: Array = []                # de {name, uid, home, groups}
+var sites: Dictionary = {}           # puerto -> {server, routes: {ruta -> {status, headers, body}}}
 var fs: RefCounted = Vfs.new()
 
 
@@ -81,8 +82,40 @@ static func from_dict(data: Variant, errors: Array) -> RefCounted:
 			"groups": groups,
 		})
 
+	_load_sites(host, data.get("sites", {}), errors, context)
 	_load_filesystem(host, data.get("fs", {}), errors, context)
 	return host
+
+
+## Sitios web simulados: "sites": {"80": {"server": "...", "routes": {"/": {status, headers, body}}}}
+static func _load_sites(host: RefCounted, sites_data: Variant, errors: Array, context: String) -> void:
+	if typeof(sites_data) != TYPE_DICTIONARY:
+		errors.append("%s: 'sites' debe ser un objeto puerto -> sitio" % context)
+		return
+	for port_key: String in sites_data:
+		if not port_key.is_valid_int() or host.get_service(int(port_key)) == null:
+			errors.append("%s: el sitio web en '%s' necesita un servicio definido en ese puerto" % [context, port_key])
+			continue
+		var site_data = sites_data[port_key]
+		if typeof(site_data) != TYPE_DICTIONARY or typeof(site_data.get("routes", null)) != TYPE_DICTIONARY:
+			errors.append("%s: el sitio del puerto %s necesita 'routes'" % [context, port_key])
+			continue
+		var routes := {}
+		for route: String in site_data["routes"]:
+			var route_data = site_data["routes"][route]
+			if not route.begins_with("/") or typeof(route_data) != TYPE_DICTIONARY:
+				errors.append("%s: ruta web inválida '%s'" % [context, route])
+				continue
+			var status := int(route_data.get("status", 200))
+			if status < 100 or status > 599:
+				errors.append("%s: código HTTP inválido %d en %s" % [context, status, route])
+				continue
+			routes[route] = {
+				"status": status,
+				"headers": route_data.get("headers", {}),
+				"body": str(route_data.get("body", "")),
+			}
+		host.sites[int(port_key)] = {"server": str(site_data.get("server", "")), "routes": routes}
 
 
 static func _load_filesystem(host: RefCounted, fs_data: Variant, errors: Array, context: String) -> void:
