@@ -30,7 +30,7 @@ func format_notifications(notifications: Array, level_before: int) -> Array[Stri
 		elif not quiet_mission_end:
 			lines.append("*** Misión completada: %s ***" % item["title"])
 			if engine.is_finished():
-				lines.append("Has completado todas las misiones de este laboratorio. Usa `perfil` para ver lo que has demostrado.")
+				lines.append("Has completado todas las misiones de este laboratorio. Usa `perfil` para ver lo que has demostrado, y `laboratorio` por si hay otro disponible.")
 			else:
 				var next: Dictionary = engine.current_mission()
 				lines.append("Nueva misión: %s" % next["title"])

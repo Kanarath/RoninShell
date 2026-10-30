@@ -9,6 +9,10 @@ const MODES := ["mision", "libre", "repaso"]
 
 var mode: String = "mision"
 var current_review_concept: String = ""
+## Laboratorios de la campaña: id -> "completado" | "disponible" | "bloqueado" (los pone la pantalla principal).
+var book_states: Dictionary = {}
+var book_titles: Dictionary = {}
+var active_book: String = ""
 var scheduler: RefCounted = null          # ReviewScheduler
 var review_book: Dictionary = {}          # libro de retos de repaso (puede estar vacío)
 var now_fn: Callable = func() -> float: return Time.get_unix_time_from_system()

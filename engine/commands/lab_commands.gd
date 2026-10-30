@@ -13,6 +13,7 @@ func _init(lab_controller: RefCounted) -> void:
 func register_all(registry: RefCounted) -> void:
 	registry.register("modo", "[juego] Cambia de modo: libre, mision (modo sin argumentos lo muestra)", _modo)
 	registry.register("reiniciar", "[juego] Restaura el laboratorio a su estado inicial", _reiniciar)
+	registry.register("laboratorio", "[juego] Lista los laboratorios y cambia de uno a otro", _laboratorio)
 	registry.register("repaso", "[juego] Repaso espaciado: qué toca repasar y retos nuevos", _repaso)
 
 
@@ -35,6 +36,29 @@ func _modo(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	if wanted == "libre":
 		return CommandResult.ok("MODO LIBRE: sin objetivos ni XP. Experimenta sin miedo; `reiniciar` restaura el laboratorio y `modo mision` te devuelve a tu misión.\n")
 	return CommandResult.ok("De vuelta a la misión. `mision` te recuerda dónde estabas.\n")
+
+
+func _laboratorio(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
+	var states: Dictionary = controller.book_states
+	if states.is_empty():
+		return CommandResult.error("laboratorio: no hay laboratorios disponibles.")
+	if args.is_empty():
+		var text := "LABORATORIOS\n"
+		for id: String in states:
+			var marker := "[x]" if states[id] == "completado" else ("[ ]" if states[id] == "disponible" else "[-]")
+			text += "  %s %-18s %-30s %s%s\n" % [marker, id, controller.book_titles.get(id, id), states[id], "  (activo)" if id == controller.active_book else ""]
+		return CommandResult.ok(text + "Cambia con `laboratorio <id>`. Se desbloquea al completar el anterior; tu progreso en cada uno se guarda por separado.\n")
+	var wanted := str(args[0])
+	if not states.has(wanted):
+		return CommandResult.error("laboratorio: no existe '%s'. Usa `laboratorio` para ver la lista." % wanted)
+	if states[wanted] == "bloqueado":
+		return CommandResult.error("laboratorio: '%s' está bloqueado: completa antes el laboratorio anterior." % wanted)
+	if controller.mode != "mision":
+		return CommandResult.error("laboratorio: solo se puede cambiar desde el modo misión (sal del modo libre o del repaso).")
+	if wanted == controller.active_book:
+		return CommandResult.ok("Ya estás en el laboratorio '%s'.\n" % wanted)
+	controller.request("lab", {"book": wanted})
+	return CommandResult.ok("Cambiando al laboratorio '%s'...\n" % wanted)
 
 
 func _reiniciar(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:

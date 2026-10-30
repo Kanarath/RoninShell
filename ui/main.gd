@@ -29,6 +29,11 @@ const MISSIONS_PATH := "res://data/missions/primer_contacto.json"
 const REVIEWS_PATH := "res://data/missions/repaso.json"
 const DOSSIER_SLOTS := 4
 const REVIEW_XP := 50
+## Los laboratorios de la campaña, en el orden en que se desbloquean (cada uno tras completar el anterior).
+const CAMPAIGN := [
+	{"id": "primer_contacto", "book": "res://data/missions/primer_contacto.json"},
+	{"id": "tienda_web", "book": "res://data/missions/tienda_web.json"},
+]
 
 ## Lo "activo" (el laboratorio, la sesión y el motor que se ven ahora). Durante un repaso apuntan
 ## al reto; el progreso real vive siempre en main_*.
@@ -43,6 +48,14 @@ var main_tracker: RefCounted = null
 var controller := LabController.new()
 var scheduler := ReviewScheduler.new()
 var review_book: Dictionary = {}
+## Campaña: un motor de misiones, un seguimiento y (al visitarlo) un laboratorio y una sesión por libro.
+var active_book := ""
+var engines: Dictionary = {}
+var trackers: Dictionary = {}
+var books: Dictionary = {}
+var worlds: Dictionary = {}
+var sessions: Dictionary = {}
+var _seen_available: Dictionary = {}
 var _review_engine: RefCounted = null
 var _review_session: RefCounted = null
 var _active_lab_path := LAB_PATH
@@ -190,24 +203,28 @@ func _make_session(lab_world: RefCounted, lab_tracker: RefCounted) -> RefCounted
 	return new_session
 
 
+
 func _start_session() -> void:
 	if world == null:
 		terminal.print_text("No se pudo cargar el laboratorio.", Palette.DANGER)
 		return
-	main_world = world
-	_active_lab_path = LAB_PATH
 
-	var banner: Array = ["RoninShell  -  laboratorio \"%s\"" % world.title]
-	var loaded := MissionLoader.load_file(MISSIONS_PATH)
-	if loaded["book"] != null:
-		main_engine = MissionEngine.new(loaded["book"])
-		main_tracker = MissionTracker.new(main_engine)
-		main_engine.on_objective_done = func(objective: Dictionary, mastery: String) -> void:
+	# Todos los libros de la campaña, cada uno con su motor de progreso.
+	for entry: Dictionary in CAMPAIGN:
+		var loaded := MissionLoader.load_file(entry["book"])
+		if loaded["book"] == null:
+			push_error("No se pudieron cargar las misiones de %s: %s" % [entry["id"], str(loaded["errors"])])
+			continue
+		var engine := MissionEngine.new(loaded["book"])
+		engine.on_objective_done = func(objective: Dictionary, mastery: String) -> void:
 			scheduler.schedule(objective["concept"], mastery, controller.now())
-		mission_engine = main_engine
-		tracker = main_tracker
-	else:
-		push_error("No se pudieron cargar las misiones: %s" % str(loaded["errors"]))
+		engines[entry["id"]] = engine
+		trackers[entry["id"]] = MissionTracker.new(engine)
+		books[entry["id"]] = loaded["book"]
+	if engines.is_empty():
+		terminal.print_text("No se pudieron cargar las misiones.", Palette.DANGER)
+		return
+	active_book = CAMPAIGN[0]["id"]
 
 	var reviews := MissionLoader.load_file(REVIEWS_PATH)
 	if reviews["book"] != null:
@@ -217,37 +234,137 @@ func _start_session() -> void:
 	controller.scheduler = scheduler
 	controller.review_book = review_book
 
-	var restored := persist and main_engine != null and _load_progress()
-	if main_engine != null:
-		banner.append("Progreso restaurado. Escribe `mision` para ver dónde estabas." if restored else "Escribe `mision` para ver tu primer objetivo y `help` para ver los comandos. Tab completa.")
+	var restored := persist and _load_progress()
+	_update_book_states()
+	for id: String in controller.book_states:
+		if controller.book_states[id] != "bloqueado":
+			_seen_available[id] = true   # lo ya disponible al arrancar no se anuncia como novedad
+
+	var loaded_lab := LabLoader.load_file(_lab_path(books[active_book]["lab"]))
+	if loaded_lab["world"] == null:
+		terminal.print_text("No se pudo cargar el laboratorio: %s" % str(loaded_lab["errors"]), Palette.DANGER)
+		return
+	main_engine = engines[active_book]
+	main_tracker = trackers[active_book]
+	mission_engine = main_engine
+	tracker = main_tracker
+	world = loaded_lab["world"]
+	main_world = world
+	worlds[active_book] = world
+	_active_lab_path = _lab_path(books[active_book]["lab"])
+
+	var banner: Array = ["RoninShell  -  laboratorio \"%s\"" % world.title]
+	banner.append("Progreso restaurado. Escribe `mision` para ver dónde estabas." if restored else "Escribe `mision` para ver tu primer objetivo y `help` para ver los comandos. Tab completa.")
 	var due := controller.due_reviews()
 	if not due.is_empty():
 		banner.append("Tienes %d concepto(s) para repasar. Escribe `repaso` cuando quieras: es opcional y nunca resta." % due.size())
 
 	session = _make_session(world, tracker)
 	main_session = session
+	sessions[active_book] = session
 	banner.append("")
 	terminal.setup(session, banner)
 	terminal.command_executed.connect(_on_command_executed)
+	network_map.world = world
 	network_map.session = session
 	network_map.refresh()
 
 
-func _load_progress() -> bool:
-	var data := _store.load_data()
+## Estado de cada laboratorio de la campaña: se desbloquea al completar el anterior.
+func _update_book_states() -> void:
+	var previous_done := true
+	controller.book_states = {}
+	controller.book_titles = {}
+	for entry: Dictionary in CAMPAIGN:
+		var id: String = entry["id"]
+		if not engines.has(id):
+			continue
+		controller.book_titles[id] = books[id]["title"]
+		if engines[id].is_finished():
+			controller.book_states[id] = "completado"
+		elif previous_done:
+			controller.book_states[id] = "disponible"
+		else:
+			controller.book_states[id] = "bloqueado"
+		previous_done = engines[id].is_finished()
+	controller.active_book = active_book
+
+
+## Avisa una sola vez cuando se desbloquea un laboratorio nuevo.
+func _announce_unlocks() -> void:
+	for id: String in controller.book_states:
+		if controller.book_states[id] == "disponible" and not _seen_available.has(id):
+			_seen_available[id] = true
+			terminal.print_text("Nuevo laboratorio disponible: %s. Escribe `laboratorio` para verlo." % controller.book_titles[id], Palette.GOLD)
+			mascot.react("happy", 4.0)
+
+
+func _switch_book(id: String) -> void:
+	if not engines.has(id) or id == active_book:
+		return
+	_save_progress()
+	if not worlds.has(id):
+		var loaded := LabLoader.load_file(_lab_path(books[id]["lab"]))
+		if loaded["world"] == null:
+			terminal.print_text("No se pudo cargar el laboratorio '%s'." % id, Palette.DANGER)
+			return
+		worlds[id] = loaded["world"]
+		sessions[id] = _make_session(worlds[id], trackers[id])
+	active_book = id
+	main_engine = engines[id]
+	main_tracker = trackers[id]
+	main_world = worlds[id]
+	main_session = sessions[id]
+	mission_engine = main_engine
+	tracker = main_tracker
+	world = main_world
+	session = main_session
+	_active_lab_path = _lab_path(books[id]["lab"])
+	network_map.world = world
+	network_map.session = session
+	var lines: Array = ["", "=== LABORATORIO: %s ===" % world.title.to_upper()]
+	if not main_engine.is_finished():
+		lines.append(main_engine.current_mission()["briefing"])
+	lines.append("Escribe `mision` para ver tus objetivos. Tu progreso en cada laboratorio se guarda por separado.")
+	lines.append("")
+	terminal.replace_session(session, lines)
+
+
+## Todo el progreso, listo para guardar: un bloque por libro, el libro activo y los repasos.
+func campaign_to_dict() -> Dictionary:
+	var campaign := {}
+	for id: String in engines:
+		campaign[id] = engines[id].to_dict()
+	return {"campaign": campaign, "active_book": active_book, "reviews": scheduler.to_dict()}
+
+
+## Restaura el progreso. Acepta también los formatos antiguos (solo el primer libro).
+func load_campaign(data: Dictionary) -> bool:
 	if data.is_empty():
 		return false
-	if data.has("progress"):
-		main_engine.load_dict(data["progress"])
+	var first: String = CAMPAIGN[0]["id"]
+	if data.has("campaign"):
+		for id: String in data["campaign"]:
+			if engines.has(id):
+				engines[id].load_dict(data["campaign"][id])
+		var saved_active := str(data.get("active_book", first))
+		active_book = saved_active if engines.has(saved_active) else first
+		scheduler.load_dict(data.get("reviews", {}))
+	elif data.has("progress"):
+		engines[first].load_dict(data["progress"])
 		scheduler.load_dict(data.get("reviews", {}))
 	else:
-		main_engine.load_dict(data)  # formato antiguo: solo el progreso de misiones
+		engines[first].load_dict(data)
 	return true
 
 
+func _load_progress() -> bool:
+	return load_campaign(_store.load_data())
+
+
 func _save_progress() -> void:
-	if persist and main_engine != null:
-		_store.save_data({"progress": main_engine.to_dict(), "reviews": scheduler.to_dict()})
+	if persist and not engines.is_empty():
+		_store.save_data(campaign_to_dict())
 
 
 func _on_command_executed(line: String, result: RefCounted) -> void:
@@ -255,6 +372,8 @@ func _on_command_executed(line: String, result: RefCounted) -> void:
 	_process_requests()
 	if controller.mode == "repaso":
 		_check_review_finished()
+	_update_book_states()
+	_announce_unlocks()
 	network_map.refresh()
 	_refresh_missions()
 	_save_progress()
@@ -268,6 +387,8 @@ func _process_requests() -> void:
 				_reset_lab()
 			"mode":
 				session.free_mode = request["mode"] == "libre"
+			"lab":
+				_switch_book(request["book"])
 			"review":
 				_start_review(request["concept"])
 			"review_exit":
@@ -284,6 +405,8 @@ func _reset_lab() -> void:
 		_review_session = session
 	else:
 		main_session = session
+		sessions[active_book] = session
+		worlds[active_book] = world
 
 
 ## Cambia a otro mundo y sesión, manteniendo lo escrito en pantalla.
