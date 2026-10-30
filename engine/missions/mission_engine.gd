@@ -41,6 +41,32 @@ func _init(mission_book: Dictionary) -> void:
 
 # --- Consulta -----------------------------------------------------------------
 
+## SOLO PARA PRUEBAS. Deja el progreso como si hubieras completado todas las misiones anteriores
+## a "index" (0 = la primera; el número de misiones = libro terminado). No da XP ni programa
+## repasos; sí recoge las evidencias, para que el expediente se vea como en una partida real.
+func debug_skip_to(index: int) -> void:
+	debug_reset()
+	var missions: Array = book["missions"]
+	mission_index = clampi(index, 0, missions.size())
+	for i in mission_index:
+		for objective: Dictionary in missions[i]["objectives"]:
+			if is_optional(objective):
+				continue
+			_state[objective["id"]]["status"] = "done"
+			_state[objective["id"]]["mastery"] = "solo"
+			if objective.has("evidence") and not _evidence.has(objective["evidence"]["id"]):
+				_evidence.append(objective["evidence"]["id"])
+
+
+## SOLO PARA PRUEBAS: borra todo el progreso de este libro.
+func debug_reset() -> void:
+	xp = 0
+	mission_index = 0
+	_evidence.clear()
+	for id: String in _state:
+		_state[id] = {"status": "pending", "hints_used": 0, "attempts": 0, "mastery": "", "xp": 0}
+
+
 ## XP extra concedido desde fuera (p. ej. por superar un repaso).
 func award_xp(amount: int) -> void:
 	xp += maxi(0, amount)

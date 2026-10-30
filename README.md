@@ -21,7 +21,9 @@ Siguiente: modo libre, repaso espaciado, más laboratorios y pentesting web. El 
 
 ## Probar el juego
 
-Abre la carpeta con Godot 4.7 y pulsa F5. Escribe directamente (no hace falta pulsar Enter antes). Empieza con `mision` y `help`. `F1` abre la chuleta de comandos, `F10` los ajustes (efectos, tamaño de letra, alto contraste, mascota y aviso de descanso) y `F2` enciende o apaga el VFX. `Esc` cierra cualquier ventana. El diseño visual de referencia está en `docs/reference/`. Para empezar de cero, borra el archivo de progreso de la carpeta de datos de la app.
+Abre la carpeta con Godot 4.7 y pulsa F5. Escribe directamente (no hace falta pulsar Enter antes). Empieza con `mision` y `help`. Al arrancar aparece el **menú inicial**: continuar partida, nueva partida (borra el progreso, con confirmación), ajustes, modo pruebas y salir. Teclas: `F9` menú, `F1` chuleta de comandos, `F10` ajustes (efectos, tamaño de letra, alto contraste, mascota y aviso de descanso), `F11` **modo pruebas** y `F2` efectos. `Esc` cierra cualquier ventana.
+
+**Modo pruebas** (`F11` o desde el menú): botones para saltar directo a cualquier misión de cualquier laboratorio (las anteriores quedan completadas, sin XP), a un modo (libre, misión, repaso por concepto), abrir ventanas, dar XP, marcar repasos como atrasados, reiniciar el laboratorio o borrar el progreso. Para arrancar sin menú: `godot --path . -- --no-menu`. El diseño visual de referencia está en `docs/reference/`. Para empezar de cero, borra el archivo de progreso de la carpeta de datos de la app.
 
 ## Ejecutar los tests
 

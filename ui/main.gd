@@ -22,6 +22,8 @@ const SettingsStore := preload("res://game/settings_store.gd")
 const BreakReminder := preload("res://game/break_reminder.gd")
 const CheatsheetPanel := preload("res://ui/widgets/cheatsheet_panel.gd")
 const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
+const DebugPanel := preload("res://ui/widgets/debug_panel.gd")
+const StartMenu := preload("res://ui/widgets/start_menu.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
@@ -68,6 +70,9 @@ var network_map: Control = null
 var settings: RefCounted = Settings.new()
 var cheatsheet_panel := CheatsheetPanel.new()
 var settings_panel := SettingsPanel.new()
+var debug_panel := DebugPanel.new()
+var start_menu := StartMenu.new()
+var _menu_return := false
 var break_reminder := BreakReminder.new()
 var _settings_store := SettingsStore.new()
 var _overlay := ColorRect.new()
@@ -100,17 +105,30 @@ func _ready() -> void:
 
 	var demo_commands: Array = []
 	var screenshot_path := ""
+	var show_menu := persist   # los tests y las capturas (sin guardado) arrancan directos al juego
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--run="):
 			demo_commands = arg.trim_prefix("--run=").split("~~")
+			show_menu = false
 		elif arg.begins_with("--screenshot="):
 			screenshot_path = arg.trim_prefix("--screenshot=")
+		elif arg == "--no-menu":
+			show_menu = false
 		elif arg == "--open=cheatsheet":
 			cheatsheet_panel.open()
+			show_menu = false
 		elif arg == "--open=settings":
 			settings_panel.open()
+			show_menu = false
+		elif arg == "--open=debug":
+			debug_panel.open()
+			show_menu = false
+		elif arg == "--open=menu":
+			show_menu = true
 	for command: String in demo_commands:
 		terminal.submit(command)
+	if show_menu:
+		_open_menu()
 	if screenshot_path != "":
 		_capture_and_quit(screenshot_path)
 
@@ -118,23 +136,42 @@ func _ready() -> void:
 ## Esc cierra cualquier ventana abierta (se mira antes que los controles, que a veces se lo comen).
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		if cheatsheet_panel.is_open() or settings_panel.is_open():
-			cheatsheet_panel.close()
-			settings_panel.close()
+		if _any_window_open():
+			for panel in [cheatsheet_panel, settings_panel, debug_panel]:
+				panel.close()
+			if start_menu.is_open() and start_menu.continue_button.disabled == false:
+				start_menu.close_menu()   # Esc en el menú equivale a continuar
+				_on_modal_changed()
 			get_viewport().set_input_as_handled()
 
 
-## F1 chuleta, F10 ajustes, F2 efectos.
+func _any_window_open() -> bool:
+	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or start_menu.is_open()
+
+
+## F1 chuleta, F9 menú, F10 ajustes, F11 pruebas, F2 efectos.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	match event.keycode:
 		KEY_F1:
 			settings_panel.close()
+			debug_panel.close()
 			cheatsheet_panel.toggle()
 		KEY_F10:
 			cheatsheet_panel.close()
+			debug_panel.close()
 			settings_panel.toggle()
+		KEY_F11:
+			cheatsheet_panel.close()
+			settings_panel.close()
+			debug_panel.toggle()
+		KEY_F9:
+			if start_menu.is_open():
+				start_menu.close_menu()
+				_on_modal_changed()
+			else:
+				_open_menu()
 		KEY_F2:
 			settings.vfx_enabled = not settings.vfx_enabled
 			settings_panel.apply(settings)
@@ -150,21 +187,68 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
 	settings_panel.changed.connect(_on_settings_changed)
+	debug_panel.action.connect(_on_debug_action)
+
+	# El menú va el último para quedar por encima. Desde él se abren ajustes y pruebas: se esconde
+	# mientras tanto y vuelve cuando se cierran (ver _menu_return).
+	add_child(start_menu)
+	start_menu.continue_pressed.connect(func() -> void: start_menu.close_menu(); _on_modal_changed())
+	start_menu.new_game_confirmed.connect(_new_game)
+	start_menu.settings_pressed.connect(func() -> void: _open_from_menu(settings_panel))
+	start_menu.debug_pressed.connect(func() -> void: _open_from_menu(debug_panel))
+	start_menu.quit_pressed.connect(func() -> void: get_tree().quit())
 
 
 ## Mientras hay una ventana abierta, el teclado es suyo; al cerrarla, vuelve a la terminal.
 func _on_modal_changed() -> void:
-	var any_open: bool = cheatsheet_panel.is_open() or settings_panel.is_open()
+	var any_open := _any_window_open()
+	if _menu_return and not any_open:
+		_menu_return = false
+		_open_menu()
+		return
 	terminal.typing_enabled = not any_open
 	if any_open:
 		terminal.input.release_focus()
 	else:
 		terminal.focus_input()
+
+
+func _open_menu() -> void:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel]:
+		panel.close()
+	_menu_return = false
+	start_menu.open_menu(_has_progress(), _menu_summary())
+	_on_modal_changed()
+
+
+func _open_from_menu(panel: Control) -> void:
+	start_menu.close_menu()
+	_menu_return = true
+	panel.open()
+
+
+## ¿Hay una partida a la que volver? (guardada en disco o ya empezada).
+func _has_progress() -> bool:
+	if persist and _store.has_save():
+		return true
+	for id: String in engines:
+		if engines[id].xp > 0:
+			return true
+	return false
+
+
+func _menu_summary() -> String:
+	if main_engine == null or not _has_progress():
+		return ""
+	var where := "%s  ·  " % books[active_book]["title"] if books.has(active_book) else ""
+	if main_engine.is_finished():
+		return "%sLaboratorio completado  ·  NV %d" % [where, main_engine.level()]
+	return "%sMisión %d  ·  NV %d  ·  %d XP" % [where, main_engine.mission_index + 1, main_engine.level(), main_engine.xp]
 
 
 func _on_settings_changed(new_settings: RefCounted) -> void:
@@ -263,11 +347,137 @@ func _start_session() -> void:
 	main_session = session
 	sessions[active_book] = session
 	banner.append("")
+	terminal.clear_screen()
 	terminal.setup(session, banner)
-	terminal.command_executed.connect(_on_command_executed)
+	if not terminal.command_executed.is_connected(_on_command_executed):
+		terminal.command_executed.connect(_on_command_executed)
 	network_map.world = world
 	network_map.session = session
 	network_map.refresh()
+	debug_panel.setup(_campaign_info(), controller.review_concepts())
+
+
+## Los laboratorios y sus misiones, para el panel de pruebas.
+func _campaign_info() -> Array:
+	var info: Array = []
+	for entry: Dictionary in CAMPAIGN:
+		var id: String = entry["id"]
+		if not books.has(id):
+			continue
+		var titles: Array = []
+		for mission: Dictionary in books[id]["missions"]:
+			titles.append(mission["title"])
+		info.append({"id": id, "title": books[id]["title"], "missions": titles})
+	return info
+
+
+## Empieza una partida desde cero: borra el progreso guardado y recarga todo.
+func _new_game() -> void:
+	_reboot(true)
+	start_menu.close_menu()
+	_on_modal_changed()
+
+
+func _reboot(delete_saved: bool) -> void:
+	engines.clear()
+	trackers.clear()
+	books.clear()
+	worlds.clear()
+	sessions.clear()
+	_seen_available.clear()
+	scheduler = ReviewScheduler.new()
+	controller.mode = "mision"
+	controller.current_review_concept = ""
+	controller.take_requests()
+	_review_engine = null
+	_review_session = null
+	if delete_saved and persist:
+		_store.delete()
+	_start_session()
+	_refresh_missions()
+	mascot.react("idle")
+
+
+# --- Modo pruebas -----------------------------------------------------------------
+
+func _on_debug_action(action_name: String, data: Dictionary) -> void:
+	var keep_open := false
+	match action_name:
+		"jump_mission":
+			debug_jump_mission(data["book"], int(data["index"]))
+		"mode_free":
+			_debug_mode("libre")
+		"mode_mision":
+			_debug_mode("mision")
+		"review":
+			_debug_review(data["concept"])
+		"review_exit":
+			if controller.mode == "repaso":
+				_exit_review("[prueba] Has salido del repaso.")
+		"open_cheatsheet":
+			cheatsheet_panel.open()
+		"open_settings":
+			settings_panel.open()
+		"open_menu":
+			_open_menu()
+			return
+		"give_xp":
+			main_engine.award_xp(300)
+			terminal.print_text("[prueba] +300 XP", Palette.GOLD)
+			keep_open = true
+		"overdue_reviews":
+			for concept in controller.review_concepts():
+				scheduler.schedule(concept, "solucion", controller.now() - 2.0 * 86400.0)
+			terminal.print_text("[prueba] Todos los repasos marcados como atrasados. Escribe `repaso`.", Palette.GOLD)
+			keep_open = true
+		"reset_lab":
+			_reset_lab()
+		"delete_progress":
+			_new_game()
+			keep_open = false
+	if not keep_open:
+		debug_panel.close()
+	_update_book_states()
+	network_map.refresh()
+	_refresh_missions()
+	_save_progress()
+
+
+## Salta a una misión: las anteriores quedan completadas (sin XP) y los laboratorios previos, terminados.
+func debug_jump_mission(book_id: String, index: int) -> void:
+	if not engines.has(book_id):
+		return
+	if controller.mode == "repaso":
+		_exit_review("[prueba] Repaso cancelado por el salto.")
+	controller.mode = "mision"
+	session.free_mode = false
+	for entry: Dictionary in CAMPAIGN:
+		if entry["id"] == book_id:
+			break
+		engines[entry["id"]].debug_skip_to(engines[entry["id"]].book["missions"].size())
+	engines[book_id].debug_skip_to(index)
+	_update_book_states()
+	if book_id != active_book:
+		_switch_book(book_id)
+	var missions: Array = books[book_id]["missions"]
+	var shown := "libro completado" if index >= missions.size() else "misión %d: %s" % [index + 1, missions[index]["title"]]
+	terminal.print_text("[prueba] Saltado a %s (%s)." % [shown, books[book_id]["title"]], Palette.GOLD)
+
+
+func _debug_mode(mode: String) -> void:
+	if controller.mode == "repaso":
+		_exit_review("[prueba] Repaso cancelado.")
+	controller.mode = mode
+	session.free_mode = mode == "libre"
+	terminal.print_text("[prueba] Modo %s." % mode, Palette.GOLD)
+
+
+func _debug_review(concept: String) -> void:
+	if controller.mode == "repaso":
+		_exit_review("[prueba] Repaso anterior cancelado.")
+	controller.mode = "repaso"
+	controller.current_review_concept = concept
+	_start_review(concept)
 
 
 ## Estado de cada laboratorio de la campaña: se desbloquea al completar el anterior.
@@ -662,7 +872,7 @@ func _build_top_bar() -> Control:
 	brand.add_child(_build_xp_bar())
 
 	var hint := Label.new()
-	hint.text = "F1  chuleta   F10  ajustes   F2  efectos"
+	hint.text = "F1  chuleta   F9  menú   F10  ajustes   F11  pruebas"
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
