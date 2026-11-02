@@ -17,6 +17,8 @@ func register_all(registry: RefCounted) -> void:
 	registry.register("laboratorio", "[juego] Lista los laboratorios y cambia de uno a otro", _laboratorio)
 	registry.register("nano", "Abre un editor de texto sencillo (Ctrl+S guarda, Esc cierra)", _nano)
 	registry.register("repaso", "[juego] Repaso espaciado: qué toca repasar y retos nuevos", _repaso)
+	registry.register("ahora", "[juego] ¿Qué hago ahora? Resumen y siguiente paso (también F4)", _ahora)
+	registry.register("tutorial", "[juego] Vuelve a ver el tutorial inicial", _tutorial)
 
 
 func _modo(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
@@ -64,6 +66,16 @@ func _nano(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	session.record("editor_opened", {"path": path})
 	controller.request("edit", {"path": path, "shown": shown})
 	return CommandResult.ok("Abriendo el editor... (Ctrl+S guarda, Esc cierra)\n")
+
+
+func _ahora(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	controller.request("now")
+	return CommandResult.ok("Abriendo «¿qué hago ahora?»...\n")
+
+
+func _tutorial(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
+	controller.request("tutorial")
+	return CommandResult.ok("Abriendo el tutorial...\n")
 
 
 func _laboratorio(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:

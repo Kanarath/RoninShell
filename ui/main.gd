@@ -25,6 +25,10 @@ const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
 const DebugPanel := preload("res://ui/widgets/debug_panel.gd")
 const ProfilePanel := preload("res://ui/widgets/profile_panel.gd")
 const EditorPanel := preload("res://ui/widgets/editor_panel.gd")
+const TutorialPanel := preload("res://ui/widgets/tutorial_panel.gd")
+const NowPanel := preload("res://ui/widgets/now_panel.gd")
+const NowAdvice := preload("res://engine/now_advice.gd")
+const SoundBank := preload("res://game/sound_bank.gd")
 const Profile := preload("res://engine/profile.gd")
 const StartMenu := preload("res://ui/widgets/start_menu.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
@@ -77,6 +81,11 @@ var settings_panel := SettingsPanel.new()
 var debug_panel := DebugPanel.new()
 var profile_panel := ProfilePanel.new()
 var editor_panel := EditorPanel.new()
+var tutorial_panel := TutorialPanel.new()
+var now_panel := NowPanel.new()
+var last_sound := ""   # el último sonido pedido (los tests no pueden oír)
+var _sound_player := AudioStreamPlayer.new()
+var _sound_cache := {}
 var _unlocked: Array[String] = []
 var _stats := {"review_passes": 0}
 var start_menu := StartMenu.new()
@@ -135,6 +144,12 @@ func _ready() -> void:
 		elif arg == "--open=profile":
 			open_profile = true
 			show_menu = false
+		elif arg == "--open=tutorial":
+			tutorial_panel.open()
+			show_menu = false
+		elif arg == "--open=now":
+			_show_now()
+			show_menu = false
 		elif arg == "--open=menu":
 			show_menu = true
 	for command: String in demo_commands:
@@ -156,7 +171,9 @@ func _input(event: InputEvent) -> void:
 				editor_panel.request_close()   # con cambios sin guardar avisa primero
 				get_viewport().set_input_as_handled()
 				return
-			for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
+			if tutorial_panel.is_open():
+				tutorial_panel.finish()   # saltarlo también cuenta como visto
+			for panel in _panels():
 				panel.close()
 			if start_menu.is_open() and start_menu.continue_button.disabled == false:
 				start_menu.close_menu()   # Esc en el menú equivale a continuar
@@ -164,31 +181,47 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## Las ventanas que se alternan con una tecla (el editor, el tutorial y el menú inicial tienen su propia lógica).
+func _panels() -> Array:
+	return [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel]
+
+
+func _close_panels_except(keep: Control) -> void:
+	for panel: Control in _panels():
+		if panel != keep:
+			panel.close()
+
+
 func _any_window_open() -> bool:
-	return cheatsheet_panel.is_open() or settings_panel.is_open() or debug_panel.is_open() or profile_panel.is_open() or editor_panel.is_open() or start_menu.is_open()
+	for panel: Control in _panels():
+		if panel.is_open():
+			return true
+	return editor_panel.is_open() or tutorial_panel.is_open() or start_menu.is_open()
 
 
-## F1 chuleta, F9 menú, F10 ajustes, F11 pruebas, F2 efectos.
+## F1 chuleta, F3 perfil, F4 ahora, F9 menú, F10 ajustes, F11 pruebas, F2 efectos.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	match event.keycode:
 		KEY_F1:
-			for other in [settings_panel, debug_panel, profile_panel]:
-				other.close()
+			_close_panels_except(cheatsheet_panel)
 			cheatsheet_panel.toggle()
 		KEY_F10:
-			for other in [cheatsheet_panel, debug_panel, profile_panel]:
-				other.close()
+			_close_panels_except(settings_panel)
 			settings_panel.toggle()
 		KEY_F11:
-			for other in [cheatsheet_panel, settings_panel, profile_panel]:
-				other.close()
+			_close_panels_except(debug_panel)
 			debug_panel.toggle()
 		KEY_F3:
-			for other in [cheatsheet_panel, settings_panel, debug_panel]:
-				other.close()
+			_close_panels_except(profile_panel)
 			_toggle_profile()
+		KEY_F4:
+			_close_panels_except(now_panel)
+			if now_panel.is_open():
+				now_panel.close()
+			else:
+				_show_now()
 		KEY_F9:
 			if start_menu.is_open():
 				start_menu.close_menu()
@@ -210,11 +243,14 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, editor_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, editor_panel, tutorial_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
 	editor_panel.saved.connect(_on_file_saved)
+	tutorial_panel.finished.connect(_on_tutorial_finished)
+	_sound_player.bus = "Master"
+	add_child(_sound_player)
 	settings_panel.changed.connect(_on_settings_changed)
 	debug_panel.action.connect(_on_debug_action)
 
@@ -263,6 +299,7 @@ func _check_achievements() -> void:
 			_unlocked.append(item["id"])
 			terminal.print_text("[*] Logro desbloqueado: %s  -  %s" % [item["title"], item["description"]], Palette.GOLD)
 			mascot.react("happy", 4.0)
+			_play_sound("logro")
 	if profile_panel.is_open():
 		_refresh_profile()
 
@@ -289,7 +326,7 @@ func _on_modal_changed() -> void:
 
 
 func _open_menu() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel]:
+	for panel in _panels():
 		panel.close()
 	_menu_return = false
 	start_menu.open_menu(_has_progress(), _menu_summary())
@@ -330,6 +367,34 @@ func _on_settings_changed(new_settings: RefCounted) -> void:
 func _save_settings() -> void:
 	if persist:
 		_settings_store.save(settings)
+
+
+## Campanilla suave (objetivo, misión, logro). Respeta el interruptor y el volumen de los ajustes.
+func _play_sound(sound_name: String) -> void:
+	if not settings.sound_enabled or settings.sound_volume <= 0.0:
+		return
+	last_sound = sound_name
+	if not _sound_cache.has(sound_name):
+		_sound_cache[sound_name] = SoundBank.make(sound_name)
+	var stream: AudioStream = _sound_cache[sound_name]
+	if stream == null:
+		return
+	_sound_player.stream = stream
+	_sound_player.volume_db = linear_to_db(settings.sound_volume)
+	_sound_player.play()
+
+
+## F4 / `ahora`: resumen corto de dónde estás y el siguiente paso, sin gastar pistas.
+func _show_now() -> void:
+	now_panel.show_advice(NowAdvice.build(mission_engine, controller.mode, controller.current_review_concept))
+	now_panel.open()
+
+
+func _on_tutorial_finished() -> void:
+	if not settings.tutorial_done:
+		settings.tutorial_done = true
+		settings_panel.apply(settings)
+		_save_settings()
 
 
 func _apply_settings() -> void:
@@ -446,6 +511,8 @@ func _new_game() -> void:
 	_reboot(true)
 	start_menu.close_menu()
 	_on_modal_changed()
+	if persist and not settings.tutorial_done:
+		tutorial_panel.open()   # solo la primera vez; `tutorial` lo vuelve a abrir
 
 
 func _reboot(delete_saved: bool) -> void:
@@ -702,6 +769,10 @@ func _process_requests() -> void:
 				_exit_review("Has salido del repaso. Volverá a tocar más adelante.")
 			"edit":
 				editor_panel.open_file(session, request["path"], request["shown"])
+			"tutorial":
+				tutorial_panel.open()
+			"now":
+				_show_now()
 
 
 func _reset_lab() -> void:
@@ -792,6 +863,10 @@ func _react(line: String, result: RefCounted) -> void:
 		completed = completed or notice.begins_with("[+]") or notice.begins_with("***")
 	if completed:
 		mascot.react("happy", 3.5)
+		var mission_done := false
+		for notice: String in result.notices:
+			mission_done = mission_done or notice.begins_with("***")
+		_play_sound("mision" if mission_done else "objetivo")
 	elif first_word in ["pista", "man", "help", "cheatsheet", "repaso"] or " --help" in line:
 		mascot.react("think", 3.0)
 	elif result.exit_code != 0 or result.stderr != "":
@@ -973,7 +1048,7 @@ func _build_top_bar() -> Control:
 	brand.add_child(_build_xp_bar())
 
 	var hint := Label.new()
-	hint.text = "F1  chuleta   F3  perfil   F9  menú   F10  ajustes   F11  pruebas"
+	hint.text = "F1  chuleta   F3  perfil   F4  ahora   F9  menú   F10  ajustes   F11  pruebas"
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
