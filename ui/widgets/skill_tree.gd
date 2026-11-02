@@ -39,7 +39,7 @@ func _draw() -> void:
 		draw_string(font, Vector2(4, top + 16), str(group["title"]).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.GOLD)
 		var concepts: Array = group["concepts"]
 		var step := size.x / 4.0
-		var y := top + row_height * 0.5
+		var y := top + row_height * 0.58
 		# Líneas primero, para que los nodos queden encima.
 		for i in range(1, concepts.size()):
 			var learned: bool = level_of(concepts[i][0]) != ""
@@ -53,6 +53,6 @@ func _draw() -> void:
 				var drawn := texture.get_size() * SCALE
 				draw_texture_rect(texture, Rect2((center - drawn / 2.0).round(), drawn), false)
 			var color := Palette.TEXT if level == "solo" else (Palette.TEAL if level == "ayuda" else Palette.TEXT_DIM)
-			draw_string(font, center + Vector2(-step / 2.0, 32), concepts[i][1], HORIZONTAL_ALIGNMENT_CENTER, step, 12, color)
+			draw_string(font, center + Vector2(-step / 2.0, 30), concepts[i][1], HORIZONTAL_ALIGNMENT_CENTER, step, 12, color)
 			if counts.get(concept, 0) > 0:
-				draw_string(font, center + Vector2(-step / 2.0, 45), "×%d" % counts[concept], HORIZONTAL_ALIGNMENT_CENTER, step, 11, Palette.GOLD_DIM)
+				draw_string(font, center + Vector2(18, -8), "×%d" % counts[concept], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Palette.GOLD_DIM)   # junto al sello: no gasta altura

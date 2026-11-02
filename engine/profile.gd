@@ -9,6 +9,7 @@ const TREE := [
 	{"title": "Web", "concepts": [["http", "HTTP"], ["cabeceras_http", "Cabeceras"], ["cookies_sesiones", "Cookies"], ["control_acceso", "Acceso"]]},
 	{"title": "Análisis e informe", "concepts": [["alcance", "Alcance"], ["analisis_hallazgos", "Hallazgos"], ["analisis_logs", "Logs"], ["informe", "Informe"]]},
 	{"title": "Automatización", "concepts": [["tuberias", "Tuberías"], ["variables_shell", "Variables"], ["bucles", "Bucles"], ["encadenar_comandos", "Encadenar"]]},
+	{"title": "Defensa y configuración", "concepts": [["configuracion_segura", "Configurar"], ["datos_sensibles", "Datos"], ["verificacion", "Verificar"]]},
 ]
 
 const ACHIEVEMENTS := [

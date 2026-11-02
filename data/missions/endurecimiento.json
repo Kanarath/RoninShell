@@ -1,0 +1,193 @@
+{
+	"id": "endurecimiento",
+	"title": "Endurecimiento de configuración",
+	"lab": "endurecimiento",
+	"missions": [
+		{
+			"id": "e1_revisar",
+			"title": "Revisar la configuración",
+			"briefing": "Revisión defensiva de tu propio servidor: se trata de comprobar si la configuración sigue las buenas prácticas acordadas y de corregirla. Trabajas solo sobre copias en /home/ronin/revision, así que no hay riesgo para nada real. Lo primero, saber qué se ha acordado.",
+			"objectives": [
+				{
+					"id": "e1_alcance",
+					"text": "Lee la nota del cliente: qué se revisa y qué buenas prácticas se esperan",
+					"short": "Lee el alcance y las buenas prácticas",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de revisar, conviene saber con qué criterios se va a valorar.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: enumera tres buenas prácticas y aclara que solo se tocan las copias de revision/."
+					]
+				},
+				{
+					"id": "e2_leer_config",
+					"text": "Lee la copia de la configuración de SSH (revision/sshd_config.copia)",
+					"short": "Lee la configuración de SSH",
+					"concept": "configuracion_segura",
+					"requires": ["e1_alcance"],
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/revision/sshd_config.copia"}},
+					"hints": [
+						"La configuración del servicio SSH es un archivo de texto con una opción por línea.",
+						"Mira qué hay dentro de la carpeta revision.",
+						"`cat revision/sshd_config.copia`: cada línea es una opción (por ejemplo `PermitRootLogin yes`)."
+					]
+				},
+				{
+					"id": "e3_clasif_root",
+					"text": "Compara la configuración con las buenas prácticas y anota con la clasificación correcta qué ocurre con el acceso de root (`hallazgo`)",
+					"short": "Clasifica el acceso de root",
+					"concept": "analisis_hallazgos",
+					"requires": ["e2_leer_config"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["root"]}},
+					"classify": {
+						"keywords": ["root"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: la opción está escrita en el archivo y contradice la buena práctica 1, así que es un hecho que cualquiera puede comprobar. Valorar cuánto riesgo supone es otro paso.",
+						"feedback": {
+							"indicio": "No es un indicio: ves la opción exacta en el archivo, no una señal indirecta.",
+							"hipotesis": "No hay nada que suponer: la configuración dice lo que dice y la nota del cliente dice lo que se esperaba.",
+							"falso-positivo": "No lo es: la opción realmente está activada y se aparta de lo acordado."
+						}
+					},
+					"hints": [
+						"Compara la línea PermitRootLogin con la práctica 1 de la nota. ¿Coinciden?",
+						"Si puedes comprobarlo tú mismo en el archivo, es un hecho confirmado.",
+						"Por ejemplo `hallazgo confirmado \"PermitRootLogin yes: SSH permite entrar directamente como root, contra la práctica acordada\"`."
+					]
+				},
+				{
+					"id": "e4_permisos",
+					"text": "Mira los permisos de los archivos de revision/ con `ls -l` y fíjate en quién puede leer clientes_backup.csv",
+					"short": "Revisa los permisos de revision/",
+					"concept": "datos_sensibles",
+					"requires": ["e2_leer_config"],
+					"check": {"event": "file_stat", "where": {"path": "/home/ronin/revision/clientes_backup.csv"}},
+					"evidence": {"id": "eve_csv", "title": "Copia de clientes", "detail": "clientes_backup.csv con permisos 644: legible por cualquier usuario"},
+					"hints": [
+						"`ls -l` muestra los permisos de cada archivo en la primera columna.",
+						"Las tres últimas letras de los permisos (r--) son las del resto de usuarios.",
+						"`ls -l revision` muestra -rw-r--r-- en clientes_backup.csv: cualquier usuario del servidor puede leerlo."
+					]
+				}
+			]
+		},
+		{
+			"id": "e2_corregir",
+			"title": "Corregir la copia",
+			"briefing": "Ahora corriges lo que se aparta de las buenas prácticas, siempre en la copia. Puedes editar con `nano revision/sshd_config.copia` o reescribir con comandos. Un cambio de seguridad se hace con cuidado: antes de cerrar una puerta, asegúrate de que tienes otra para entrar.",
+			"objectives": [
+				{
+					"id": "e5_root_no",
+					"text": "Corrige la copia de SSH para que NO se permita el acceso directo de root (PermitRootLogin no)",
+					"short": "Prohíbe el acceso directo de root",
+					"concept": "configuracion_segura",
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["permitrootlogin no"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["permitrootlogin no"]}}
+					]},
+					"evidence": {"id": "eve_root_no", "title": "Acceso de root cerrado", "detail": "PermitRootLogin no en la copia de configuración"},
+					"hints": [
+						"Hay que cambiar el valor de una opción del archivo, no añadir una nueva línea contradictoria.",
+						"`nano revision/sshd_config.copia` abre el editor: cambia `yes` por `no` en la línea de PermitRootLogin y guarda con Ctrl+S.",
+						"En el editor la línea debe quedar `PermitRootLogin no`. Guarda con Ctrl+S y cierra con Esc."
+					]
+				},
+				{
+					"id": "e6_chmod",
+					"text": "Restringe clientes_backup.csv para que solo lo lea su propietario (chmod)",
+					"short": "Restringe los permisos del CSV",
+					"concept": "datos_sensibles",
+					"requires": ["e4_permisos"],
+					"check": {"event": "mode_changed", "where": {"path": "/home/ronin/revision/clientes_backup.csv", "mode": ["600", "640", "400"]}},
+					"hints": [
+						"Los permisos se cambian con chmod; en octal, cada cifra es para propietario, grupo y resto.",
+						"Quieres que el resto de usuarios no tenga ningún permiso. `chmod 600` deja solo al propietario leer y escribir.",
+						"`chmod 600 revision/clientes_backup.csv` y compruébalo con `ls -l revision`."
+					]
+				},
+				{
+					"id": "e7_password_no",
+					"text": "Desactiva el acceso por contraseña en la copia (PasswordAuthentication no), ahora que la clave pública sigue activa",
+					"short": "Desactiva el acceso por contraseña",
+					"concept": "configuracion_segura",
+					"requires": ["e5_root_no"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["passwordauthentication no", "pubkeyauthentication yes"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["passwordauthentication no", "pubkeyauthentication yes"]}}
+					]},
+					"hints": [
+						"Quitar las contraseñas solo es seguro si hay otra forma legítima de entrar.",
+						"En la copia, PubkeyAuthentication ya está en yes: las claves públicas seguirán funcionando. Cambia PasswordAuthentication a no.",
+						"Deja `PasswordAuthentication no` y mantén `PubkeyAuthentication yes`. Guarda con Ctrl+S."
+					]
+				},
+				{
+					"id": "e8_transfer",
+					"text": "Transferencia: baja MaxAuthTries a 3 o menos en la copia (menos intentos por conexión)",
+					"short": "Transferencia: reduce MaxAuthTries",
+					"concept": "configuracion_segura",
+					"transfer": true,
+					"requires": ["e5_root_no"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["maxauthtries 3"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["maxauthtries 3"]}},
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["maxauthtries 2"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/sshd_config.copia"}, "contains": {"text": ["maxauthtries 2"]}}
+					]},
+					"hints": [
+						"Es el mismo tipo de cambio que antes, con otra opción y otro valor.",
+						"Busca la línea MaxAuthTries en la copia y cámbiale el número.",
+						"`MaxAuthTries 3` en la copia. Guarda con Ctrl+S."
+					]
+				}
+			]
+		},
+		{
+			"id": "e3_verificar",
+			"title": "Verificar y documentar",
+			"briefing": "Un cambio sin comprobar es una suposición. Verifica con un `if` y deja constancia en un informe breve: qué estaba mal, dónde, qué has cambiado y por qué.",
+			"objectives": [
+				{
+					"id": "e9_verificar",
+					"text": "Comprueba con un `if` que la copia ya cumple la práctica 1 (por ejemplo con grep) y que el comando responde según el caso",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["e5_root_no"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"Un `if` ejecuta una rama u otra según el código de salida de un comando; grep sale con 0 si encuentra la línea.",
+						"Forma general: if grep 'texto' archivo; then echo ok; else echo revisar; fi",
+						"`if grep 'PermitRootLogin no' revision/sshd_config.copia; then echo cumple; else echo revisar; fi`"
+					]
+				},
+				{
+					"id": "e10_informe",
+					"text": "Redacta en informe/borrador.md qué estaba mal, dónde, la evidencia, el riesgo y lo que has corregido, y supera la revisión (`revisar`)",
+					"short": "Informe de configuración",
+					"concept": "informe",
+					"requires": ["e6_chmod", "e7_password_no", "e9_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 120,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué: lo que se apartaba de las buenas prácticas", "any": ["root", "contraseña", "permisos", "legible"]},
+							{"id": "donde", "label": "Dónde: servidor y archivos", "any": ["sshd_config", "clientes_backup", "srv-interno"]},
+							{"id": "evidencia", "label": "Evidencia: lo que mostraba la revisión", "any": ["permitrootlogin", "644", "rw-r--r--", "passwordauthentication"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "cualquier usuario", "acceso no autorizado", "datos de clientes", "fuerza bruta"]},
+							{"id": "correccion", "label": "Corrección: lo que has cambiado o propones", "any": ["permitrootlogin no", "chmod 600", "600", "passwordauthentication no", "claves públicas", "clave pública"]}
+						]
+					},
+					"evidence": {"id": "eve_informe", "title": "Informe de configuración", "detail": "borrador.md supera la revisión"},
+					"hints": [
+						"Un buen informe responde a: qué estaba mal, dónde, evidencia, riesgo y qué corriges. Sin dramatizar y sin afirmar lo que no probaste.",
+						"Puedes escribirlo con `nano informe/borrador.md` y comprobar con `revisar` qué falta.",
+						"Ejemplo: \"En srv-interno, sshd_config permitía PermitRootLogin yes y contraseñas, y clientes_backup.csv tenía permisos 644 (rw-r--r--): riesgo de acceso no autorizado y de que cualquier usuario lea datos de clientes. Corrección: PermitRootLogin no, claves públicas en lugar de contraseña y chmod 600 en el CSV.\""
+					]
+				}
+			]
+		}
+	]
+}

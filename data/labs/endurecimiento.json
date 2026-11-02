@@ -1,0 +1,54 @@
+{
+	"id": "endurecimiento",
+	"title": "Endurecimiento de configuración",
+	"cidr": "10.0.4.0/24",
+	"player_host": "10.0.4.2",
+	"hosts": [
+		{
+			"ip": "10.0.4.2",
+			"hostname": "srv-interno",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "REVISIÓN DE CONFIGURACIÓN (defensiva)\nServidor propio: srv-interno. Se trabaja SOLO sobre las copias de /home/ronin/revision/; no se toca nada en producción.\n\nBuenas prácticas acordadas:\n  1) El acceso por SSH no debe permitir entrar directamente como root.\n  2) Mejor claves públicas que contraseñas.\n  3) Los archivos con datos de clientes solo los lee quien los necesita.\n"
+				},
+				"/home/ronin/revision": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/revision/sshd_config.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "644",
+					"content": "# Copia de trabajo de /etc/ssh/sshd_config\nPort 22\nProtocol 2\nPermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\nX11Forwarding yes\nMaxAuthTries 6\n"
+				},
+				"/home/ronin/revision/clientes_backup.csv": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "644",
+					"content": "id,nombre,email\n1,Ana Prueba,ana@example.test\n2,Luis Ejemplo,luis@example.test\n3,Marta Demo,marta@example.test\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de configuración\n\nPendiente de completar.\n"
+				}
+			}
+		}
+	]
+}

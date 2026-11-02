@@ -85,7 +85,7 @@ func save() -> Dictionary:
 		_status.text = "No se puede guardar: ruta no válida"
 		_status.add_theme_color_override("font_color", Palette.DANGER)
 		return {"ok": false, "message": "ruta no válida"}
-	session.record("file_edited", {"path": path})
+	session.record("file_edited", {"path": path, "text": text_edit.text})
 	_loaded_text = text_edit.text
 	dirty = false
 	_warned_discard = false

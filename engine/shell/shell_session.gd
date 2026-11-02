@@ -379,6 +379,7 @@ func _apply_redirect(redirect: Dictionary, content: String) -> String:
 			return "bash: %s: Not a directory\n" % path
 		Vfs.WriteResult.IS_DIR:
 			return "bash: %s: Is a directory\n" % path
+	record("file_written", {"path": absolute, "text": host.fs.read_file(absolute)})   # lo que queda en el archivo, para objetivos de configuración
 	return ""
 
 
