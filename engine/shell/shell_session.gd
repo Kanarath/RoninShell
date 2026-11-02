@@ -9,6 +9,7 @@ extends RefCounted
 const Tokenizer := preload("res://engine/shell/tokenizer.gd")
 const Parser := preload("res://engine/shell/parser.gd")
 const ListParser := preload("res://engine/shell/list_parser.gd")
+const Arithmetic := preload("res://engine/shell/arithmetic.gd")
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
 const CommandDocs := preload("res://engine/commands/command_docs.gd")
@@ -16,6 +17,7 @@ const CommandDocs := preload("res://engine/commands/command_docs.gd")
 const HISTORY_LIMIT := 500
 const MAX_LOOP_ITERATIONS := 1000
 const MAX_SUBSTITUTION_DEPTH := 4
+const MAX_COMMANDS_PER_LINE := 5000   # tope de seguridad: ningún bucle puede colgar el juego
 
 var world: RefCounted
 var registry: RefCounted
@@ -39,6 +41,8 @@ var _vars: Dictionary = {}
 var _exported: Dictionary = {}
 var _pending_stderr := ""   # errores de $( ) que salen por pantalla junto al resto
 var _subst_depth := 0
+var _budget := 0           # comandos que aún puede ejecutar la línea en curso
+var _aborted := false      # se agotó el presupuesto: se corta todo lo que quede
 
 
 ## En modo libre lo que haces se registra marcado como "free": se ve en el mapa, pero no cuenta
@@ -101,6 +105,8 @@ func run(line: String) -> RefCounted:
 	_vars["PWD"] = cwd
 	var out := {"stdout": "", "stderr": "", "notices": []}
 	_pending_stderr = ""
+	_budget = MAX_COMMANDS_PER_LINE
+	_aborted = false
 	_exec_items(built["items"], out)
 	var final := CommandResult.new()
 	final.stdout = out["stdout"]
@@ -141,6 +147,34 @@ func command_substitution(text: String) -> String:
 	return inner["stdout"].rstrip("\n")
 
 
+## $(( ... )): solo números, variables y + - * / % ( ). Cualquier otra cosa se rechaza antes de evaluar.
+func arithmetic(expression: String) -> String:
+	var cleaned := ""
+	var i := 0
+	while i < expression.length():
+		var c := expression[i]
+		if c == "$":
+			i += 1
+		elif Tokenizer.is_valid_name(c):
+			var j := i
+			while j < expression.length() and (Tokenizer.is_valid_name(expression[j]) or expression[j].is_valid_int()):
+				j += 1
+			var value := expand_var(expression.substr(i, j - i))
+			cleaned += str(int(value)) if value.is_valid_int() else "0"
+			i = j
+		elif c in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "*", "/", "%", "(", ")", " ", "\t"]:
+			cleaned += c
+			i += 1
+		else:
+			_pending_stderr += "bash: %s: error de sintaxis en la expresión aritmética (solo + - * / % y paréntesis)\n" % expression.strip_edges()
+			return ""
+	var result := Arithmetic.evaluate(cleaned)
+	if not result["ok"]:
+		_pending_stderr += "bash: %s: %s\n" % [expression.strip_edges(), result["error"]]
+		return ""
+	return str(result["value"])
+
+
 func set_var(name: String, value: String) -> void:
 	_vars[name] = value
 	record("var_set", {"name": name})
@@ -177,10 +211,49 @@ func _exec_items(items: Array, out: Dictionary) -> void:
 			continue
 		if op != "" and op != ";":
 			record("list_op", {"op": op, "ran": true})
-		if item["kind"] == "for":
-			_run_for(item, out)
-		else:
-			_run_pipeline(item["text"], out)
+		match item["kind"]:
+			"for":
+				_run_for(item, out)
+			"while":
+				_run_while(item, out)
+			"if":
+				_run_if(item, out)
+			_:
+				_run_pipeline(item["text"], out)
+		if _aborted:
+			return
+
+
+## if COND; then A; [else B;] fi: la condición es un comando y cuenta su código de salida.
+func _run_if(item: Dictionary, out: Dictionary) -> void:
+	_exec_items(item["cond"], out)
+	if _aborted:
+		return
+	var branch := "then"
+	if last_exit_code == 0:
+		_exec_items(item["then"], out)
+	elif not item["else"].is_empty():
+		branch = "else"
+		_exec_items(item["else"], out)
+	else:
+		branch = "none"
+		last_exit_code = 0   # un if sin rama que se cumpla sale con éxito, como en bash
+	record("if_ran", {"branch": branch})
+
+
+## while COND; do ...; done (until es lo mismo con la condición invertida). Con tope de vueltas.
+func _run_while(item: Dictionary, out: Dictionary) -> void:
+	var rounds := 0
+	while not _aborted:
+		_exec_items(item["cond"], out)
+		if _aborted or (last_exit_code == 0) == item["negate"]:
+			break
+		if rounds >= MAX_LOOP_ITERATIONS:
+			_fail_into(out, "bucle detenido tras %d vueltas: parece infinito (límite de seguridad del simulador)" % MAX_LOOP_ITERATIONS)
+			break
+		rounds += 1
+		_exec_items(item["body"], out)
+	record("loop_ran", {"variable": "while", "count": rounds})
 
 
 func _run_for(item: Dictionary, out: Dictionary) -> void:
@@ -201,6 +274,8 @@ func _run_for(item: Dictionary, out: Dictionary) -> void:
 		return
 	last_exit_code = 0
 	for value: String in values:
+		if _aborted:
+			break
 		_vars[variable] = value
 		_exec_items(item["body"], out)
 	record("loop_ran", {"variable": variable, "count": values.size()})
@@ -213,6 +288,12 @@ func _fail_into(out: Dictionary, message: String) -> void:
 
 ## Una tubería: tokeniza (ahora, con las variables al día), parsea y ejecuta sus comandos.
 func _run_pipeline(text: String, out: Dictionary) -> void:
+	_budget -= 1
+	if _budget < 0:
+		if not _aborted:
+			_fail_into(out, "demasiados comandos en una sola línea: se detiene (límite de seguridad del simulador)")
+		_aborted = true
+		return
 	var tokenized := Tokenizer.tokenize(text, self)
 	if tokenized["error"] != "":
 		_fail_into(out, tokenized["error"])

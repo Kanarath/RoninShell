@@ -14,7 +14,8 @@ extends RefCounted
 ## simples, nunca se expande. Sin `env` no se expande nada (modo literal).
 ## Todavía NO soporta comodines (*): llegarán cuando una misión los necesite.
 ##
-## `env` debe ofrecer expand_var(nombre) -> String y command_substitution(texto) -> String.
+## `env` debe ofrecer expand_var(nombre), command_substitution(texto) y arithmetic(expresión), todos -> String.
+## $(( expresión )) hace aritmética entera (+ - * / % y paréntesis; los nombres son variables).
 ##
 ## Devuelve {"tokens": Array, "error": String}. Cada token es un diccionario:
 ##   {"type": "word", "text": String}
@@ -150,6 +151,8 @@ static func _expansion(line: String, i: int, env: Object) -> Dictionary:
 		if close == -1:
 			return {"consumed": 0, "value": "", "error": "unexpected EOF while looking for matching `)'"}
 		var inner := line.substr(i + 2, close - i - 2)
+		if inner.begins_with("(") and inner.ends_with(")"):   # $(( expresión )): aritmética entera
+			return {"consumed": close - i + 1, "value": env.arithmetic(inner.substr(1, inner.length() - 2)), "error": ""}
 		return {"consumed": close - i + 1, "value": env.command_substitution(inner), "error": ""}
 	if next == "{":
 		var end := line.find("}", i + 2)

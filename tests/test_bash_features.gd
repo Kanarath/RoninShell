@@ -201,9 +201,8 @@ func test_bucle_mal_formado_se_explica() -> void:
 	assert_true("syntax error" in s.run("for x in a b; echo $x; done").stderr)
 	assert_true("syntax error" in s.run("for in a b; do echo; done").stderr)
 	assert_true("syntax error" in s.run("done").stderr)
-	assert_true("anidados" in s.run("for a in 1; do for b in 2; do echo; done; done").stderr)
-	assert_true("todavía no está disponible" in s.run("while true; do echo; done").stderr)
-	assert_true("todavía no está disponible" in s.run("if true; then echo; fi").stderr)
+	assert_true("syntax error" in s.run("for a in 1; do").stderr)
+	assert_true("todavía no está disponible" in s.run("case x in x) echo hi; esac").stderr)
 
 
 func test_limite_de_elementos() -> void:
@@ -293,3 +292,108 @@ func test_redirecciones_y_variables_juntas() -> void:
 	assert_eq(_out(s, "cat $F"), "hola\n")
 	s.run("for n in 1 2; do echo l$n >> $F; done")
 	assert_eq(_out(s, "wc -l $F").strip_edges().split(" ")[0], "3")
+
+
+# --- if / while / until / anidación / aritmética ---
+
+func test_if_then_else_segun_el_codigo_de_salida() -> void:
+	var s := _session()
+	assert_eq(_out(s, "if true; then echo si; else echo no; fi"), "si\n")
+	assert_eq(_out(s, "if false; then echo si; else echo no; fi"), "no\n")
+	assert_eq(_out(s, "if false; then echo si; fi"), "", "sin rama que se cumpla no escribe nada")
+	assert_eq(s.run("if false; then echo si; fi").exit_code, 0, "y sale con éxito, como bash")
+	assert_eq(_out(s, "if test -d /etc; then echo hay; fi"), "hay\n")
+
+
+func test_if_con_corchetes_elif_y_condicion_compuesta() -> void:
+	var s := _session()
+	assert_eq(_out(s, "if [ -d /etc ]; then echo dir; fi"), "dir\n")
+	assert_eq(_out(s, "if [ 5 -lt 3 ]; then echo a; elif [ 5 -gt 3 ]; then echo b; else echo c; fi"), "b\n")
+	assert_eq(_out(s, "if [ 1 -eq 2 ]; then echo a; elif [ 2 -eq 3 ]; then echo b; else echo c; fi"), "c\n")
+	assert_eq(_out(s, "if test -d /etc && test -d /var; then echo ambos; fi"), "ambos\n")
+	assert_true("missing" in s.run("[ -d /etc").stderr)
+	assert_eq(_count(s, "if_ran"), 6, "cada if evaluado cuenta; un elif es un if dentro del else")
+
+
+func test_if_con_comandos_reales_como_condicion() -> void:
+	var s := _session()
+	s.run("echo 'Failed password' > log.txt")
+	assert_eq(_out(s, "if grep Failed log.txt; then echo hay fallos; fi"), "Failed password\nhay fallos\n")
+	assert_eq(_out(s, "if grep Nada log.txt; then echo x; else echo limpio; fi"), "limpio\n")
+
+
+func test_while_con_contador_aritmetico() -> void:
+	var s := _session()
+	assert_eq(_out(s, "n=0; while [ $n -lt 3 ]; do echo n=$n; n=$((n+1)); done"), "n=0\nn=1\nn=2\n")
+	assert_eq(_out(s, "echo $n"), "3\n")
+	var loops: Array = s.events.filter(func(e: Dictionary) -> bool: return e["type"] == "loop_ran" and e["variable"] == "while")
+	assert_eq(loops.size(), 1)
+	assert_eq(loops[0]["count"], 3)
+
+
+func test_until_es_un_while_invertido() -> void:
+	var s := _session()
+	assert_eq(_out(s, "n=0; until [ $n -ge 2 ]; do echo $n; n=$((n+1)); done"), "0\n1\n")
+
+
+func test_un_bucle_infinito_se_detiene_sin_colgar_el_juego() -> void:
+	var s := _session()
+	var result = s.run("while true; do true; done")
+	assert_true("infinito" in result.stderr or "límite" in result.stderr)
+	assert_true(result.exit_code != 0 or result.stderr != "")
+	var again = s.run("echo sigo vivo")
+	assert_eq(again.stdout, "sigo vivo\n", "la sesión sigue funcionando")
+
+
+func test_el_tope_de_comandos_corta_los_bucles_anidados() -> void:
+	var s := _session()
+	var result = s.run("for a in $(seq 1 100); do for b in $(seq 1 100); do true; done; done")
+	assert_true("límite de seguridad" in result.stderr)
+	assert_eq(_out(s, "echo ok"), "ok\n")
+
+
+func test_bucles_e_ifs_anidados() -> void:
+	var s := _session()
+	assert_eq(_out(s, "for a in 1 2; do for b in x y; do echo $a$b; done; done"), "1x\n1y\n2x\n2y\n")
+	assert_eq(_out(s, "for n in 1 2 3; do if [ $n -eq 2 ]; then echo dos; else echo otro; fi; done"), "otro\ndos\notro\n")
+
+
+func test_if_y_bucles_se_pueden_encadenar_con_conectores() -> void:
+	var s := _session()
+	assert_eq(_out(s, "if true; then echo a; fi && echo b"), "a\nb\n")
+	assert_eq(_out(s, "if false; then echo a; fi || echo b"), "", "un if sin rama sale con 0, así que || no corre")
+
+
+func test_estructuras_mal_formadas_se_explican() -> void:
+	var s := _session()
+	assert_true("fi" in s.run("if true; then echo x").stderr)
+	assert_true("syntax error" in s.run("if true; echo x; fi").stderr)
+	assert_true("syntax error" in s.run("if true; then; fi").stderr)
+	assert_true("syntax error" in s.run("fi").stderr)
+	assert_true("syntax error" in s.run("else echo x").stderr)
+	assert_true("syntax error" in s.run("while true; do echo; done extra").stderr)
+	assert_true("syntax error" in s.run("while; do echo; done").stderr)
+	assert_eq(s.run("if true; then echo x").stdout, "", "un error de sintaxis no ejecuta nada")
+
+
+func test_aritmetica_entera() -> void:
+	var s := _session()
+	assert_eq(_out(s, "echo $((2+3*4))"), "14\n")
+	assert_eq(_out(s, "echo $(( (2+3) * 4 ))"), "20\n")
+	assert_eq(_out(s, "echo $((7/2)) $((7%3)) $((-5+2))"), "3 1 -3\n")
+	s.run("a=6")
+	assert_eq(_out(s, "echo $((a*2)) $(($a+1))"), "12 7\n")
+	assert_eq(_out(s, "echo $((sin))"), "0\n", "una variable sin definir vale 0")
+	assert_true("división entre 0" in s.run("echo $((1/0))").stderr)
+	assert_true("aritmética" in s.run("echo $((1+x.y))").stderr)
+	assert_true("paréntesis" in s.run("echo $((2*(3+4))").stderr or "EOF" in s.run("echo $((2*(3+4))").stderr)
+
+
+func test_el_evaluador_aritmetico_solo_entiende_numeros() -> void:
+	var Arithmetic := preload("res://engine/shell/arithmetic.gd")
+	assert_eq(Arithmetic.evaluate("1 + 2 * 3")["value"], 7)
+	assert_true(Arithmetic.evaluate("")["ok"] == false)
+	assert_true(Arithmetic.evaluate("2 +")["ok"] == false)
+	assert_true(Arithmetic.evaluate("OS.execute")["ok"] == false)
+	assert_true(Arithmetic.evaluate("(1+2")["ok"] == false)
+	assert_true(Arithmetic.evaluate("1 2")["ok"] == false)

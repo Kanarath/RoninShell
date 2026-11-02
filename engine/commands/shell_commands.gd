@@ -17,6 +17,7 @@ func register_all(registry: RefCounted) -> void:
 	registry.register("env", "Muestra las variables exportadas", _env)
 	registry.register("seq", "Escribe una secuencia de números (seq 1 5)", _seq)
 	registry.register("test", "Comprueba una condición y sale con 0 si es cierta (test -f archivo)", _test)
+	registry.register("[", "Igual que test, pero acaba en ] (if [ -f archivo ]; then ...)", _bracket)
 
 
 func _true(_session: RefCounted, _args: Array, _stdin: String) -> RefCounted:
@@ -159,3 +160,10 @@ func _exit(code: int) -> RefCounted:
 	var result := CommandResult.new()
 	result.exit_code = code
 	return result
+
+
+## `[ condición ]` es test con un corchete final obligatorio.
+func _bracket(session: RefCounted, args: Array, stdin: String) -> RefCounted:
+	if args.is_empty() or args[args.size() - 1] != "]":
+		return CommandResult.error("bash: [: missing `]'", 2)
+	return _test(session, args.slice(0, args.size() - 1), stdin)
