@@ -1,0 +1,41 @@
+{
+	"id": "repaso_config",
+	"title": "Repaso: servidor de ficheros",
+	"cidr": "10.0.7.0/24",
+	"player_host": "10.0.7.2",
+	"hosts": [
+		{
+			"ip": "10.0.7.2",
+			"hostname": "ficheros03",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/copias": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/copias/servicio.conf": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "644",
+					"content": "# Copia de trabajo del servicio de ficheros\nPuerto 2121\nAccesoAnonimo si\nSubidasPermitidas si\nMaxConexiones 200\n"
+				},
+				"/home/ronin/copias/nominas.csv": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"mode": "666",
+					"content": "id,empleado,importe\n1,Persona Demo A,1000\n2,Persona Demo B,1200\n"
+				}
+			}
+		}
+	]
+}

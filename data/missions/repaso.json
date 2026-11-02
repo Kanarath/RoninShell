@@ -495,6 +495,91 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_config",
+			"concept": "configuracion_segura",
+			"lab": "repaso_config",
+			"title": "Repaso: configuración segura",
+			"briefing": "Servidor propio, otra configuración. En copias/servicio.conf el acceso anónimo está activado y nadie lo necesita. Corrígelo en la copia (nunca en producción).",
+			"objectives": [
+				{
+					"id": "r_cfg_anonimo",
+					"text": "Cambia la copia copias/servicio.conf para que no se permita el acceso anónimo (AccesoAnonimo no)",
+					"short": "Cierra el acceso anónimo",
+					"concept": "configuracion_segura",
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/copias/servicio.conf"}, "contains": {"text": ["accesoanonimo no"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/copias/servicio.conf"}, "contains": {"text": ["accesoanonimo no"]}}
+					]},
+					"hints": [
+						"Primero mira qué opciones hay: es un archivo de texto con una por línea.",
+						"Cambia el valor de la línea existente, no añadas una contradictoria. `nano copias/servicio.conf` y guarda con Ctrl+S.",
+						"La línea debe quedar `AccesoAnonimo no`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_datos",
+			"concept": "datos_sensibles",
+			"lab": "repaso_config",
+			"title": "Repaso: datos sensibles",
+			"briefing": "En copias/ hay un CSV de nóminas. Comprueba quién puede leerlo y, si es demasiada gente, ciérralo.",
+			"objectives": [
+				{
+					"id": "r_dat_ver",
+					"text": "Mira los permisos de copias/ con `ls -l` y fíjate en quién puede leer y escribir nominas.csv",
+					"short": "Revisa los permisos",
+					"concept": "datos_sensibles",
+					"check": {"event": "file_stat", "where": {"path": "/home/ronin/copias/nominas.csv"}},
+					"hints": [
+						"`ls -l` muestra los permisos en la primera columna.",
+						"Las tres últimas letras son las del resto de usuarios.",
+						"`ls -l copias`: nominas.csv es rw-rw-rw-, así que cualquiera puede leerlo e incluso modificarlo."
+					]
+				},
+				{
+					"id": "r_dat_chmod",
+					"text": "Deja nominas.csv accesible solo para su propietario (chmod)",
+					"short": "Restringe el CSV",
+					"concept": "datos_sensibles",
+					"requires": ["r_dat_ver"],
+					"check": {"event": "mode_changed", "where": {"path": "/home/ronin/copias/nominas.csv", "mode": ["600", "640", "400"]}},
+					"hints": [
+						"Con chmod, cada cifra octal es para propietario, grupo y resto.",
+						"El resto de usuarios no debería tener ningún permiso.",
+						"`chmod 600 copias/nominas.csv` y vuelve a mirar con `ls -l copias`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_verificar",
+			"concept": "verificacion",
+			"lab": "repaso_config",
+			"title": "Repaso: verificación",
+			"briefing": "Un cambio sin comprobar es una suposición. Corrige la copia y verifica con un `if` que el resultado es el esperado.",
+			"objectives": [
+				{
+					"id": "r_ver_if",
+					"text": "Comprueba con un `if` y grep que copias/servicio.conf ya tiene SubidasPermitidas en no, tras cambiarlo",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"check": {"all": [
+						{"any": [
+							{"event": "file_edited", "where": {"path": "/home/ronin/copias/servicio.conf"}, "contains": {"text": ["subidaspermitidas no"]}},
+							{"event": "file_written", "where": {"path": "/home/ronin/copias/servicio.conf"}, "contains": {"text": ["subidaspermitidas no"]}}
+						]},
+						{"event": "if_ran"}
+					]},
+					"hints": [
+						"Son dos pasos: cambiar la opción y luego comprobar que el cambio está.",
+						"Edita con `nano copias/servicio.conf`; después: if grep 'texto' archivo; then echo ok; else echo revisar; fi",
+						"`if grep 'SubidasPermitidas no' copias/servicio.conf; then echo cumple; else echo revisar; fi`"
+					]
+				}
+			]
 		}
 	]
 }

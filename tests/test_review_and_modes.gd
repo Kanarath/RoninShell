@@ -42,6 +42,9 @@ const SOLUTIONS := {
 	"r_encadenar": ["test -f /var/log/app/error.log && grep -c ERROR /var/log/app/error.log", "test -f /var/log/app/nada.log || echo falta el registro"],
 	"r_logs": ["grep ' 500' /var/log/app/access.log | wc -l"],
 	"r_comodines": ["grep -c ERROR /var/log/app/*.log"],
+	"r_config": ["echo 'AccesoAnonimo no' > copias/servicio.conf"],
+	"r_datos": ["ls -l copias", "chmod 600 copias/nominas.csv"],
+	"r_verificar": ["echo 'SubidasPermitidas no' > copias/servicio.conf", "if grep 'SubidasPermitidas no' copias/servicio.conf; then echo cumple; else echo revisar; fi"],
 	"r_control_acceso": [
 		"curl -c jar.txt -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso",
 		"curl -b jar.txt 'portal01:8080/factura?num=301'",
@@ -81,6 +84,7 @@ func test_los_datos_de_repaso_son_validos() -> void:
 	assert_eq(LabLoader.load_file(REVIEW_LAB)["errors"], [])
 	assert_eq(LabLoader.load_file("res://data/labs/repaso_web.json")["errors"], [])
 	assert_eq(LabLoader.load_file("res://data/labs/repaso_logs.json")["errors"], [])
+	assert_eq(LabLoader.load_file("res://data/labs/repaso_config.json")["errors"], [])
 	assert_eq(MissionLoader.load_file(REVIEW_BOOK)["errors"], [])
 
 
@@ -99,7 +103,7 @@ func test_los_laboratorios_de_repaso_son_otras_redes() -> void:
 	var originals: Array = []
 	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json", "res://data/labs/guardia_logs.json", "res://data/labs/endurecimiento.json"]:
 		originals.append(LabLoader.load_file(path)["world"])
-	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json", "res://data/labs/repaso_logs.json"]:
+	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json", "res://data/labs/repaso_logs.json", "res://data/labs/repaso_config.json"]:
 		var review = LabLoader.load_file(path)["world"]
 		for original in originals:
 			for ip in review.host_ips():
