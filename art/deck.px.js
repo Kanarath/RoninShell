@@ -55,7 +55,36 @@ function screenLines(c) {
   for (let y = 24; y < 142; y += 2) c.hline(48, y, 224, "b")
 }
 
-function bootScene(name, open) {
+
+// Letras propias para el título (5x7, rotuladas a 2x): la fuente 3x5 de pxl confundía la N.
+const GLYPHS = {
+  R: ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+  O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+  N: ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
+  I: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "#####"],
+  S: [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+  H: ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+  E: ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+  L: ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+}
+function title(word, x, y, color, shadow) {
+  return (c) => {
+    const step = 12
+    const left = x - Math.floor((word.length * step - 2) / 2)
+    for (let i = 0; i < word.length; i++) {
+      GLYPHS[word[i]].forEach((row, gy) => {
+        for (let gx = 0; gx < 5; gx++) {
+          if (row[gx] === "#") {
+            if (shadow) c.rect(left + i * step + gx * 2 + 1, y + gy * 2 + 1, 2, 2, shadow)
+            c.rect(left + i * step + gx * 2, y + gy * 2, 2, 2, color)
+          }
+        }
+      })
+    }
+  }
+}
+
+function bootScene(name, open, base = false) {
   const slide = Math.round(open * 114)
   return scene(name, { w: 320, h: 180, bg: "k" },
   layer("body",
@@ -80,14 +109,13 @@ function bootScene(name, open) {
     rect(46, 22, 228, 3, "b"), rect(46, 133, 228, 3, "b"),
     screenLines),
   layer("content",
-    text(160, 31, "RONINSHELL", "t", { scale: 3, align: "c", shadow: "b" }),
-    text(160, 30, "RONINSHELL", "G", { scale: 3, align: "c" }),
-    stamp("helmet", 130, 43),
+    title("RONINSHELL", 160, 26, "G", "g"),
+    ...(base ? [] : [stamp("helmet", 130, 43)]),
     text(160, 99, "CYBERDECK OS 0.1", "T", { align: "c" }),
-    // barra de carga segmentada
-    ...Array.from({ length: 16 }, (_, i) => rect(86 + i * 9, 112, 7, 8, i < 9 ? "c" : "e")),
-    text(160, 124, "CARGANDO MODULOS...", "t", { align: "c" })),
-  layer("shutters",
+    ...(base ? [] : [
+      ...Array.from({ length: 16 }, (_, i) => rect(86 + i * 9, 112, 7, 8, i < 9 ? "c" : "e")),
+      text(160, 124, "CARGANDO MODULOS...", "t", { align: "c" })])),
+  layer("shutters", { hidden: base },
     clip([46, 22, 228, 114],
       // dos compuertas que se abren hacia los lados
       rect(46 - slide, 22, 114, 114, "m"), rect(160 + slide, 22, 114, 114, "m"),
@@ -105,9 +133,8 @@ function bootScene(name, open) {
     ...[0, 1, 2, 3, 4].map((i) => rect(246 + i * 7, 158, 4, 14, i % 2 ? "t" : "T")),
     // interruptores
     ...[0, 1, 2].flatMap((i) => [rect(104 + i * 14, 160, 6, 10, "n"), rect(105 + i * 14, 161, 4, 4, "N")]),
-    // LEDs
-    px(190, 164, "r"), px(191, 164, "r"), px(198, 164, "a"), px(199, 164, "a"),
-    px(206, 164, "c"), px(207, 164, "c"),
+    // LEDs (en la base se dibujan desde el juego, para que parpadeen)
+    ...(base ? [] : [px(190, 164, "r"), px(191, 164, "r"), px(198, 164, "a"), px(199, 164, "a"), px(206, 164, "c"), px(207, 164, "c")]),
     // mandos
     circ(222, 165, 6, "M"), circ(222, 165, 4, "n"), vline(222, 160, 5, "Y"),
     circ(236, 165, 4, "G"), circ(236, 165, 2, "y")),
@@ -117,3 +144,34 @@ function bootScene(name, open) {
 bootScene("boot", 1)
 bootScene("boot_closed", 0)
 bootScene("boot_mid", 0.35)
+
+bootScene("boot_base", 1, true)
+
+// Compuerta izquierda (la derecha es su reflejo): 114x114, cubre media pantalla.
+sprite("shutter", { w: 114, h: 114 },
+  rect(0, 0, 114, 114, "m"), rect(0, 0, 114, 3, "M"), rect(0, 111, 114, 3, "k"),
+  rect(109, 0, 5, 114, "n"), vline(109, 0, 114, "N"), vline(113, 0, 114, "M"),
+  ...[12, 40, 68, 96].map((y) => stamp("_rivet", 98, y)),
+  hline(8, 57, 90, "M"), hline(8, 58, 90, "k"))
+
+// Cursores del juego (se amplian x2 al cargarlos).
+sprite("cursor_arrow", { w: 12, h: 17, outline: "k" }, `
+  G...........
+  GG..........
+  GyG.........
+  GyyG........
+  GyyyG.......
+  GyyyyG......
+  GyyyyyG.....
+  GyyyyyyG....
+  GyyyyyyyG...
+  GyyyyyGGGG..
+  GyyGyyG.....
+  GyG.GyyG....
+  GG..GyyG....
+  G....GyyG...
+  .....GyyG...
+  ......GG....`)
+sprite("cursor_link", { base: "cursor_arrow", swap: { G: "T", y: "c" } })
+sprite("cursor_text", { w: 5, h: 15, outline: "k" },
+  rect(0, 0, 5, 1, "c"), rect(2, 1, 1, 13, "c"), rect(0, 14, 5, 1, "c"))

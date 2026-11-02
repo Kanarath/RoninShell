@@ -4,6 +4,7 @@ extends "res://ui/widgets/modal.gd"
 signal changed(settings: RefCounted)
 
 const Settings := preload("res://game/settings.gd")
+const ButtonStyle := preload("res://ui/theme/button_style.gd")
 
 var vfx_enabled := CheckButton.new()
 var vfx_intensity := HSlider.new()
@@ -42,6 +43,7 @@ func _init() -> void:
 
 	var reset := Button.new()
 	reset.text = "Restablecer valores"
+	ButtonStyle.apply(reset)
 	reset.pressed.connect(func() -> void:
 		var defaults: RefCounted = Settings.new()
 		defaults.tutorial_done = _tutorial_done   # restablecer ajustes no vuelve a mostrar el tutorial

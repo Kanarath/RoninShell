@@ -31,6 +31,11 @@ const NowAdvice := preload("res://engine/now_advice.gd")
 const SoundBank := preload("res://game/sound_bank.gd")
 const Profile := preload("res://engine/profile.gd")
 const StartMenu := preload("res://ui/widgets/start_menu.gd")
+const BootScreen := preload("res://ui/widgets/boot_screen.gd")
+const DeckFrame := preload("res://ui/widgets/deck_frame.gd")
+const FxLayer := preload("res://ui/widgets/fx_layer.gd")
+const ExpandView := preload("res://ui/widgets/expand_view.gd")
+const CursorSkin := preload("res://ui/theme/cursor_skin.gd")
 const CrtShader := preload("res://ui/shaders/crt_overlay.gdshader")
 
 const LAB_PATH := "res://data/labs/primer_contacto.json"
@@ -90,6 +95,11 @@ var _sound_cache := {}
 var _unlocked: Array[String] = []
 var _stats := {"review_passes": 0}
 var start_menu := StartMenu.new()
+var boot_screen: Control = null
+var deck_frame := DeckFrame.new()
+var fx_layer := FxLayer.new()
+var expand_view := ExpandView.new()
+var _menu_after_boot := false
 var _menu_return := false
 var break_reminder := BreakReminder.new()
 var _settings_store := SettingsStore.new()
@@ -113,6 +123,7 @@ func _ready() -> void:
 	if persist:
 		settings = _settings_store.load_settings()
 
+	CursorSkin.apply()
 	_build_background()
 	_build_layout()
 	_build_modals()
@@ -125,6 +136,8 @@ func _ready() -> void:
 	var screenshot_path := ""
 	var show_menu := persist   # los tests y las capturas (sin guardado) arrancan directos al juego
 	var open_profile := false
+	var shot_delay := 1.0
+	var boot_forced := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--run="):
 			demo_commands = arg.trim_prefix("--run=").split("~~")
@@ -153,15 +166,46 @@ func _ready() -> void:
 			show_menu = false
 		elif arg == "--open=menu":
 			show_menu = true
+		elif arg == "--open=expand":
+			show_menu = false
+			expand_view.open_from.call_deferred(_objectives_frame)
+		elif arg == "--open=boot":
+			boot_forced = true
+			show_menu = true
+		elif arg.begins_with("--shot-delay="):
+			shot_delay = float(arg.trim_prefix("--shot-delay="))
 	for command: String in demo_commands:
 		terminal.submit(command)
 	if open_profile:
 		_refresh_profile()
 		profile_panel.open()
-	if show_menu:
+	if boot_forced or (persist and show_menu and not "--open=menu" in OS.get_cmdline_user_args()):
+		_menu_after_boot = show_menu
+		_play_boot()
+	elif show_menu:
 		_open_menu()
 	if screenshot_path != "":
-		_capture_and_quit(screenshot_path)
+		_capture_and_quit(screenshot_path, shot_delay)
+
+
+## Arranque del cyberdeck (compuertas y carga); al terminar abre el menú inicial.
+func _play_boot() -> void:
+	boot_screen = BootScreen.new()
+	boot_screen.vfx = settings.vfx_enabled
+	boot_screen.finished.connect(_on_boot_finished)
+	add_child(boot_screen)
+	move_child(_overlay, -1)   # el velo CRT sigue por encima de todo
+	terminal.typing_enabled = false
+	boot_screen.play()
+
+
+func _on_boot_finished() -> void:
+	boot_screen.queue_free()
+	boot_screen = null
+	if _menu_after_boot:
+		_open_menu()
+	else:
+		_on_modal_changed()
 
 
 ## Esc cierra cualquier ventana abierta (se mira antes que los controles, que a veces se lo comen).
@@ -184,7 +228,7 @@ func _input(event: InputEvent) -> void:
 
 ## Las ventanas que se alternan con una tecla (el editor, el tutorial y el menú inicial tienen su propia lógica).
 func _panels() -> Array:
-	return [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel]
+	return [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, expand_view]
 
 
 func _close_panels_except(keep: Control) -> void:
@@ -244,7 +288,7 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, editor_panel, tutorial_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, expand_view, editor_panel, tutorial_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
@@ -400,6 +444,9 @@ func _on_tutorial_finished() -> void:
 
 func _apply_settings() -> void:
 	_overlay.visible = settings.vfx_enabled
+	CutFrame.animate = settings.vfx_enabled
+	DeckFrame.animate = settings.vfx_enabled
+	fx_layer.enabled = settings.vfx_enabled
 	(_overlay.material as ShaderMaterial).set_shader_parameter("intensity", settings.vfx_intensity)
 	terminal.set_font_size(settings.font_size)
 	terminal.set_high_contrast(settings.high_contrast)
@@ -868,10 +915,14 @@ func _react(line: String, result: RefCounted) -> void:
 		for notice: String in result.notices:
 			mission_done = mission_done or notice.begins_with("***")
 		_play_sound("mision" if mission_done else "objetivo")
+		deck_frame.blink_led(2)
+		fx_layer.burst(_objectives_frame.get_global_rect().get_center(), Palette.GOLD, 56 if mission_done else 28)
 	elif first_word in ["pista", "man", "help", "cheatsheet", "repaso"] or " --help" in line:
 		mascot.react("think", 3.0)
+		deck_frame.blink_led(1)
 	elif result.exit_code != 0 or result.stderr != "":
 		mascot.react("alert", 2.5)
+		deck_frame.blink_led(0)
 
 
 ## Redibuja los paneles que dependen del progreso: misión, objetivos, XP y evidencias.
@@ -965,10 +1016,7 @@ func _rebuild_dossier() -> void:
 # --- Construcción de la interfaz -------------------------------------------
 
 func _build_background() -> void:
-	var bg := ColorRect.new()
-	bg.color = Palette.BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	add_child(deck_frame)   # carcasa del cyberdeck: fondo, marco, remaches y franja de mandos
 
 	var watermark := Label.new()
 	watermark.text = "浪人"
@@ -985,13 +1033,14 @@ func _build_layout() -> void:
 	var margin := MarginContainer.new()
 	margin.name = "Layout"
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
-	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_left", int(DeckFrame.INSET.x))
+	margin.add_theme_constant_override("margin_top", int(DeckFrame.INSET.y))
+	margin.add_theme_constant_override("margin_right", int(DeckFrame.INSET.z))
+	margin.add_theme_constant_override("margin_bottom", int(DeckFrame.INSET.w))
 	add_child(margin)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 6)
 	margin.add_child(column)
 	column.add_child(_build_top_bar())
 
@@ -1005,7 +1054,7 @@ func _build_layout() -> void:
 	var side := VBoxContainer.new()
 	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side.size_flags_stretch_ratio = 1.25
-	side.add_theme_constant_override("separation", 12)
+	side.add_theme_constant_override("separation", 8)
 	body.add_child(side)
 	_objectives_frame = _build_objectives_panel()
 	side.add_child(_objectives_frame)
@@ -1016,7 +1065,7 @@ func _build_layout() -> void:
 
 func _build_top_bar() -> Control:
 	var bar := HBoxContainer.new()
-	bar.custom_minimum_size = Vector2(0, 70)
+	bar.custom_minimum_size = Vector2(0, 60)
 
 	var left := HBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1116,6 +1165,7 @@ func _build_objectives_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Objectives"
 	frame.title = "Objetivos de misión"
+	_make_expandable(frame)
 	frame.content.add_theme_constant_override("separation", 4)
 	return frame
 
@@ -1124,6 +1174,7 @@ func _build_map_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Map"
 	frame.title = "Mapa de red"
+	_make_expandable(frame)
 	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	network_map = NetworkMap.new()
 	network_map.name = "NetworkMap"
@@ -1137,6 +1188,7 @@ func _build_dossier_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Dossier"
 	frame.title = "Expediente de evidencias"
+	_make_expandable(frame)
 	_dossier_grid.columns = 2
 	_dossier_grid.add_theme_constant_override("h_separation", 10)
 	_dossier_grid.add_theme_constant_override("v_separation", 6)
@@ -1164,7 +1216,13 @@ func _evidence_card(label: String, collected: bool) -> Control:
 	return card
 
 
+func _make_expandable(frame: Control) -> void:
+	frame.expandable = true
+	frame.expand_requested.connect(expand_view.open_from.bind(frame))
+
+
 func _build_overlay() -> void:
+	add_child(fx_layer)
 	_overlay.name = "Overlay"
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1184,8 +1242,8 @@ func _colored_label(text: String, color: Color, font_size: int) -> Label:
 	return label
 
 
-func _capture_and_quit(path: String) -> void:
-	await get_tree().create_timer(1.0).timeout
+func _capture_and_quit(path: String, delay := 1.0) -> void:
+	await get_tree().create_timer(delay).timeout
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(path)
 	get_tree().quit()

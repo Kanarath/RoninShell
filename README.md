@@ -38,6 +38,16 @@ run_tests.cmd
 
 Lanza Godot en modo consola (`--headless`), descubre `tests/test_*.gd`, ejecuta cada método `test_*` y devuelve código de salida 1 si algo falla. Si Godot no está en la ruta por defecto, define la variable de entorno `GODOT` con la ruta del `.exe` de consola.
 
+## Interfaz "cyberdeck"
+
+La ventana es la pantalla de un cyberdeck: carcasa de metal con remaches, esquinas doradas y una franja de mandos
+(los LEDs reaccionan a lo que haces). Al abrir el juego, las compuertas se abren y carga (cualquier tecla lo salta).
+Los paneles laterales (objetivos, mapa, expediente) se amplían con el botón de la esquina o clicando en su título,
+con un zoom desde su sitio; Esc o un clic fuera los cierra. Hay cursor propio, ondas al hacer clic y chispas al
+completar objetivos. Todo ello se apaga con F2 / Ajustes → Efectos visuales.
+
+El arte sale de `art/deck.px.js` (`build_art.cmd` lo copia a `assets/ui`). `art/shot.ps1` hace capturas para revisar la interfaz.
+
 ## Estructura
 
 | Carpeta | Contenido |

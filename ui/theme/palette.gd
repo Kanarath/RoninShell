@@ -20,6 +20,13 @@ const TEXT := Color("9ff2df")         # texto principal de la terminal
 const TEXT_DIM := Color("6fb3a5")     # texto secundario
 const TEXT_TITLE := Color("e9d9a6")   # títulos de panel (crema dorado)
 
+## Metal del cyberdeck (placas, tornillos, botones).
+const METAL := Color("11191c")
+const METAL_LIGHT := Color("232b30")
+const METAL_DARK := Color("0a1012")
+const STEEL := Color("6c7f88")
+const RIVET := Color("8a9da6")
+
 const PARCHMENT := Color("d9c9a0")    # tarjetas de evidencia
 const INK := Color("2a2418")          # texto sobre pergamino
 
