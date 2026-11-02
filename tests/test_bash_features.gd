@@ -397,3 +397,12 @@ func test_el_evaluador_aritmetico_solo_entiende_numeros() -> void:
 	assert_true(Arithmetic.evaluate("OS.execute")["ok"] == false)
 	assert_true(Arithmetic.evaluate("(1+2")["ok"] == false)
 	assert_true(Arithmetic.evaluate("1 2")["ok"] == false)
+
+
+func test_break_y_continue_dentro_de_bucles() -> void:
+	var s := _session()
+	assert_eq(_out(s, "for i in 1 2 3 4; do if [ $i -eq 3 ]; then break; fi; echo $i; done"), "1\n2\n")
+	assert_eq(_out(s, "for i in 1 2 3 4; do if [ $i -eq 2 ]; then continue; fi; echo $i; done"), "1\n3\n4\n")
+	assert_eq(_out(s, "n=0; while true; do n=$((n+1)); if [ $n -ge 3 ]; then break; fi; done; echo $n"), "3\n")
+	assert_eq(_out(s, "for a in 1 2; do for b in x y; do echo $a$b; break; done; done"), "1x\n2x\n")
+	assert_true("not found" in s.run("break").stderr or "no encontrad" in s.run("break").stderr, "fuera de un bucle no es un comando")

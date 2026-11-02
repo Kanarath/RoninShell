@@ -44,6 +44,8 @@ var _pending_stderr := ""   # errores de $( ) que salen por pantalla junto al re
 var _subst_depth := 0
 var _budget := 0           # comandos que aún puede ejecutar la línea en curso
 var _aborted := false      # se agotó el presupuesto: se corta todo lo que quede
+var _loop_depth := 0       # bucles anidados en ejecución (break/continue solo valen dentro)
+var _loop_signal := ""     # "break" o "continue" pendiente de que lo recoja el bucle
 
 
 ## En modo libre lo que haces se registra marcado como "free": se ve en el mapa, pero no cuenta
@@ -108,6 +110,8 @@ func run(line: String) -> RefCounted:
 	_pending_stderr = ""
 	_budget = MAX_COMMANDS_PER_LINE
 	_aborted = false
+	_loop_depth = 0
+	_loop_signal = ""
 	_exec_items(built["items"], out)
 	var final := CommandResult.new()
 	final.stdout = out["stdout"]
@@ -220,8 +224,14 @@ func _exec_items(items: Array, out: Dictionary) -> void:
 			"if":
 				_run_if(item, out)
 			_:
-				_run_pipeline(item["text"], out)
-		if _aborted:
+				var word: String = item["text"].strip_edges()
+				if _loop_depth > 0 and (word == "break" or word == "continue"):
+					_loop_signal = word
+					last_exit_code = 0
+					record("loop_control", {"kind": word})
+				else:
+					_run_pipeline(item["text"], out)
+		if _aborted or _loop_signal != "":
 			return
 
 
@@ -245,6 +255,7 @@ func _run_if(item: Dictionary, out: Dictionary) -> void:
 ## while COND; do ...; done (until es lo mismo con la condición invertida). Con tope de vueltas.
 func _run_while(item: Dictionary, out: Dictionary) -> void:
 	var rounds := 0
+	_loop_depth += 1
 	while not _aborted:
 		_exec_items(item["cond"], out)
 		if _aborted or (last_exit_code == 0) == item["negate"]:
@@ -254,6 +265,11 @@ func _run_while(item: Dictionary, out: Dictionary) -> void:
 			break
 		rounds += 1
 		_exec_items(item["body"], out)
+		var signal_seen := _loop_signal
+		_loop_signal = ""
+		if signal_seen == "break":
+			break
+	_loop_depth -= 1
 	record("loop_ran", {"variable": "while", "count": rounds})
 
 
@@ -281,11 +297,17 @@ func _run_for(item: Dictionary, out: Dictionary) -> void:
 		_fail_into(out, "for: demasiados elementos (máximo %d)" % MAX_LOOP_ITERATIONS)
 		return
 	last_exit_code = 0
+	_loop_depth += 1
 	for value: String in values:
 		if _aborted:
 			break
 		_vars[variable] = value
 		_exec_items(item["body"], out)
+		var signal_seen := _loop_signal
+		_loop_signal = ""
+		if signal_seen == "break":
+			break
+	_loop_depth -= 1
 	record("loop_ran", {"variable": variable, "count": values.size()})
 
 
