@@ -16,6 +16,7 @@ Qué hay hecho:
 - **Shell con scripts de una línea**: variables (`VAR=x`, `$VAR`, `${VAR}`, `$?`, `~`), `;` `&&` `||`, `for`, `while`, `until` e `if/elif/else` (anidables, con tope de seguridad contra bucles infinitos), `$(comando)`, aritmética `$((a+1))`, y `export env unset seq test [ true false`. Comodines `*` y `?` sobre el sistema de archivos del laboratorio. Sin `case`, funciones ni `break`/`continue` todavía.
 - **Tercer laboratorio, "Guardia de logs"** (defensivo): analiza `auth.log` y `access.log` de un servidor propio con tuberías, variables, bucles y `&&`/`||`, y termina con un informe de medidas defensivas.
 - **Cuarto laboratorio, "Endurecimiento"** (defensivo): revisión de la configuración de SSH y permisos de una copia de trabajo de un servidor propio, corrección, verificación con `if` e informe.
+- **Repaso espaciado de automatización**: seis retos nuevos (tuberías, variables, bucles, encadenar, logs y comodines) en un laboratorio distinto.
 - **Editor `nano`**: ventana con Ctrl+S para guardar y Esc para cerrar, con los mismos permisos que el resto del laboratorio.
 - **Ayuda integrada**: `<comando> --help`, `man <comando>` (con límites y "qué NO puedes concluir"), `help`, y `cheatsheet [tema]`.
 - **Interfaz** (`ui/`): terminal interactiva (escribir directo, historial con flechas, Tab, Ctrl+L), paneles de misión, mapa de red y expediente, con VFX mínimo.

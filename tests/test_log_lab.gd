@@ -25,6 +25,7 @@ const M2 := [
 const M3 := [
 	"test -f /var/log/auth.log && grep -c Failed /var/log/auth.log",
 	"test -f /var/log/noexiste || echo falta el log",
+	"grep -c Failed /var/log/*.log",
 	"grep ' 404 ' /var/log/access.log | wc -l",
 	"echo 'En /var/log/auth.log de log-box hay 9 intentos fallidos de contraseña; 6 vienen de 203.0.113.7 en 14 segundos, un patrón compatible con fuerza bruta. Riesgo: adivinar una contraseña y lograr acceso no autorizado. Recomendación: usar claves públicas, desactivar el acceso con contraseña y bloquear la IP con fail2ban.' >> informe/borrador.md",
 	"revisar",

@@ -1,11 +1,11 @@
 {
 	"id": "guardia_logs",
 	"title": "Guardia de logs",
-	"cidr": "10.0.3.0/24",
-	"player_host": "10.0.3.2",
+	"cidr": "10.0.6.0/24",
+	"player_host": "10.0.6.2",
 	"hosts": [
 		{
-			"ip": "10.0.3.2",
+			"ip": "10.0.6.2",
 			"hostname": "log-box",
 			"os": "Linux",
 			"users": [

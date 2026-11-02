@@ -1,0 +1,43 @@
+{
+	"id": "repaso_logs",
+	"title": "Repaso: servicio de pedidos",
+	"cidr": "10.0.5.0/24",
+	"player_host": "10.0.5.2",
+	"hosts": [
+		{
+			"ip": "10.0.5.2",
+			"hostname": "vigia02",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/var": {"type": "dir"},
+				"/var/log": {"type": "dir"},
+				"/var/log/app": {"type": "dir"},
+				"/var/log/app/error.log": {
+					"type": "file",
+					"content": "2026-11-02 08:00:01 ERROR pagos timeout al conectar con la pasarela\n2026-11-02 08:00:09 INFO pagos reintento correcto\n2026-11-02 08:15:44 ERROR inventario timeout consultando almacen\n2026-11-02 08:15:50 ERROR inventario timeout consultando almacen\n2026-11-02 09:02:12 WARN pagos latencia alta\n2026-11-02 09:30:00 ERROR envios fallo de validacion\n2026-11-02 10:11:11 ERROR pagos timeout al conectar con la pasarela\n"
+				},
+				"/var/log/app/access.log": {
+					"type": "file",
+					"content": "10.0.9.4 - \"GET /pagar HTTP/1.1\" 200\n10.0.9.4 - \"POST /pagar HTTP/1.1\" 500\n10.0.9.7 - \"GET /stock HTTP/1.1\" 200\n10.0.9.7 - \"GET /stock HTTP/1.1\" 500\n10.0.9.7 - \"GET /stock HTTP/1.1\" 500\n10.0.9.9 - \"GET /envio HTTP/1.1\" 404\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/servicios.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "pagos\ninventario\nenvios\n"
+				}
+			}
+		}
+	]
+}

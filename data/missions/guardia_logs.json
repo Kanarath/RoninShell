@@ -179,6 +179,20 @@
 					]
 				},
 				{
+					"id": "g12_comodin",
+					"text": "Cuenta los intentos fallidos en TODOS los registros de /var/log con un solo comando, usando un comodín (*)",
+					"short": "Un comando para todos los .log",
+					"concept": "comodines",
+					"requires": ["g8_and"],
+					"check": {"event": "glob_expanded"},
+					"evidence": {"id": "evg_comodin", "title": "Todos los registros", "detail": "grep -c Failed /var/log/*.log: 9 en auth.log y 0 en access.log"},
+					"hints": [
+						"El asterisco (*) representa cualquier cadena: *.log son todos los archivos que acaban en .log.",
+						"grep acepta varios archivos y con -c cuenta por archivo. El comodín va sin comillas para que el shell lo expanda.",
+						"`grep -c Failed /var/log/*.log` muestra una cuenta por archivo."
+					]
+				},
+				{
 					"id": "g11_informe",
 					"text": "Redacta en informe/borrador.md qué observaste y qué medidas propones, y supera la revisión (`revisar`). Puedes usar `nano informe/borrador.md`",
 					"short": "Informe con medidas defensivas",

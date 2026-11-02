@@ -348,5 +348,153 @@
 				}
 			]
 		}
+,
+		{
+			"id": "r_tuberias",
+			"concept": "tuberias",
+			"lab": "repaso_logs",
+			"title": "Repaso: tuberías",
+			"briefing": "Otro servidor, otros registros. Los errores de la aplicación están en /var/log/app/error.log. Cuenta cuántas líneas mencionan un timeout sin leerlas una a una.",
+			"objectives": [
+				{
+					"id": "r_tub_contar",
+					"text": "Cuenta con una tubería (grep ... | wc -l) cuántas líneas de /var/log/app/error.log contienen la palabra timeout",
+					"short": "Cuenta los timeouts con una tubería",
+					"concept": "tuberias",
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/var/log/app/error.log"}},
+						{"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}}
+					]},
+					"hints": [
+						"Un comando busca y otro cuenta; la tubería (|) los une.",
+						"grep filtra las líneas con la palabra; wc -l cuenta líneas.",
+						"`grep timeout /var/log/app/error.log | wc -l` devuelve 4."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_variables",
+			"concept": "variables_shell",
+			"lab": "repaso_logs",
+			"title": "Repaso: variables",
+			"briefing": "Vas a buscar varias veces el mismo servicio en el registro de errores. En vez de escribirlo cada vez, guárdalo en una variable.",
+			"objectives": [
+				{
+					"id": "r_var_usar",
+					"text": "Guarda el nombre de un servicio (por ejemplo pagos) en una variable y úsala para buscarlo en /var/log/app/error.log",
+					"short": "Guarda y usa una variable",
+					"concept": "variables_shell",
+					"check": {"all": [
+						{"event": "var_set"},
+						{"event": "file_read", "where": {"path": "/var/log/app/error.log"}}
+					]},
+					"hints": [
+						"Una variable se crea con NOMBRE=valor y se usa con $NOMBRE.",
+						"Sin espacios alrededor del =. Después, grep $NOMBRE archivo.",
+						"`S=pagos` y luego `grep $S /var/log/app/error.log`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_bucles",
+			"concept": "bucles",
+			"lab": "repaso_logs",
+			"title": "Repaso: bucles",
+			"briefing": "En servicios.txt está la lista de servicios de la aplicación. Cuenta cuántas líneas de error.log menciona cada uno, con un bucle y no a mano.",
+			"objectives": [
+				{
+					"id": "r_buc_lista",
+					"text": "Recorre servicios.txt con un bucle for y cuenta con grep | wc las líneas de /var/log/app/error.log de cada servicio",
+					"short": "Bucle sobre servicios.txt",
+					"concept": "bucles",
+					"check": {"all": [
+						{"event": "loop_ran"},
+						{"event": "file_read", "where": {"path": "/home/ronin/servicios.txt"}},
+						{"event": "file_read", "where": {"path": "/var/log/app/error.log"}},
+						{"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}, "min": 3}
+					]},
+					"hints": [
+						"for repite un comando por cada elemento; $(cat archivo) da los elementos de un archivo.",
+						"for s in $(cat servicios.txt); do ...; done, y dentro un grep con $s y wc -l.",
+						"`for s in $(cat servicios.txt); do echo $s; grep $s /var/log/app/error.log | wc -l; done` muestra 4, 2 y 1."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_encadenar",
+			"concept": "encadenar_comandos",
+			"lab": "repaso_logs",
+			"title": "Repaso: encadenar comandos",
+			"briefing": "Antes de contar errores conviene comprobar que el registro existe, y si no existe, avisar. Para eso se encadenan comandos según el resultado del anterior.",
+			"objectives": [
+				{
+					"id": "r_enc_cadena",
+					"text": "Usa && para contar solo si el registro existe y || para avisar cuando falte (puedes usar test -f)",
+					"short": "Encadena con && y ||",
+					"concept": "encadenar_comandos",
+					"check": {"all": [
+						{"event": "list_op", "where": {"op": "&&", "ran": true}},
+						{"event": "list_op", "where": {"op": "||"}}
+					]},
+					"hints": [
+						"&& ejecuta el siguiente solo si el anterior salió bien; || solo si falló.",
+						"test -f archivo no escribe nada: solo devuelve si existe. Pruébalo con un archivo que existe y con otro que no.",
+						"`test -f /var/log/app/error.log && grep -c ERROR /var/log/app/error.log` y `test -f /var/log/app/nada.log || echo falta el registro`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_logs",
+			"concept": "analisis_logs",
+			"lab": "repaso_logs",
+			"title": "Repaso: análisis de logs",
+			"briefing": "El registro de accesos (/var/log/app/access.log) acaba cada línea con el código de respuesta. Cuenta cuántas peticiones fallaron con un error 500.",
+			"objectives": [
+				{
+					"id": "r_log_500",
+					"text": "Cuenta cuántas peticiones de /var/log/app/access.log acabaron en 500",
+					"short": "Cuenta los errores 500",
+					"concept": "analisis_logs",
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/var/log/app/access.log"}},
+						{"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}}
+					]},
+					"hints": [
+						"Es el mismo patrón de buscar y contar, con otro archivo y otro texto.",
+						"El código va al final de la línea: busca ' 500'.",
+						"`grep ' 500' /var/log/app/access.log | wc -l` devuelve 3."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_comodines",
+			"concept": "comodines",
+			"lab": "repaso_logs",
+			"title": "Repaso: comodines",
+			"briefing": "En /var/log/app hay varios registros. Cuenta las líneas con ERROR de todos los .log con un solo comando, sin escribir cada nombre.",
+			"objectives": [
+				{
+					"id": "r_com_todos",
+					"text": "Con un comodín, cuenta las líneas con ERROR de todos los .log de /var/log/app en un solo comando",
+					"short": "Un comando para todos los .log",
+					"concept": "comodines",
+					"check": {"all": [
+						{"event": "glob_expanded"},
+						{"event": "file_read", "where": {"path": "/var/log/app/error.log"}},
+						{"event": "file_read", "where": {"path": "/var/log/app/access.log"}}
+					]},
+					"hints": [
+						"El asterisco * representa cualquier cadena de caracteres: *.log son todos los archivos que acaban en .log.",
+						"grep -c cuenta líneas por archivo; el comodín va sin comillas para que el shell lo expanda.",
+						"`grep -c ERROR /var/log/app/*.log` muestra una cuenta por archivo."
+					]
+				}
+			]
+		}
 	]
 }

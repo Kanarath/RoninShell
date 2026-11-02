@@ -36,6 +36,12 @@ const SOLUTIONS := {
 		"curl -i -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso",
 		"curl -b 'sid=ses-cli1-77b2' portal01:8080/mi-cuenta",
 	],
+	"r_tuberias": ["grep timeout /var/log/app/error.log | wc -l"],
+	"r_variables": ["S=pagos", "grep $S /var/log/app/error.log"],
+	"r_bucles": ["for s in $(cat servicios.txt); do echo $s; grep $s /var/log/app/error.log | wc -l; done"],
+	"r_encadenar": ["test -f /var/log/app/error.log && grep -c ERROR /var/log/app/error.log", "test -f /var/log/app/nada.log || echo falta el registro"],
+	"r_logs": ["grep ' 500' /var/log/app/access.log | wc -l"],
+	"r_comodines": ["grep -c ERROR /var/log/app/*.log"],
 	"r_control_acceso": [
 		"curl -c jar.txt -d 'usuario=cliente1&clave=prueba456' portal01:8080/acceso",
 		"curl -b jar.txt 'portal01:8080/factura?num=301'",
@@ -74,12 +80,13 @@ func _play(game: Dictionary, lines: Array) -> void:
 func test_los_datos_de_repaso_son_validos() -> void:
 	assert_eq(LabLoader.load_file(REVIEW_LAB)["errors"], [])
 	assert_eq(LabLoader.load_file("res://data/labs/repaso_web.json")["errors"], [])
+	assert_eq(LabLoader.load_file("res://data/labs/repaso_logs.json")["errors"], [])
 	assert_eq(MissionLoader.load_file(REVIEW_BOOK)["errors"], [])
 
 
 func test_cada_reto_de_repaso_apunta_a_un_concepto_que_se_aprende_en_las_misiones() -> void:
 	var main_concepts := {}
-	for path in [MAIN_BOOK, "res://data/missions/tienda_web.json"]:
+	for path in [MAIN_BOOK, "res://data/missions/tienda_web.json", "res://data/missions/guardia_logs.json", "res://data/missions/endurecimiento.json"]:
 		for mission: Dictionary in MissionLoader.load_file(path)["book"]["missions"]:
 			for objective: Dictionary in mission["objectives"]:
 				main_concepts[objective["concept"]] = true
@@ -90,9 +97,9 @@ func test_cada_reto_de_repaso_apunta_a_un_concepto_que_se_aprende_en_las_misione
 
 func test_los_laboratorios_de_repaso_son_otras_redes() -> void:
 	var originals: Array = []
-	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json"]:
+	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json", "res://data/labs/guardia_logs.json", "res://data/labs/endurecimiento.json"]:
 		originals.append(LabLoader.load_file(path)["world"])
-	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json"]:
+	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json", "res://data/labs/repaso_logs.json"]:
 		var review = LabLoader.load_file(path)["world"]
 		for original in originals:
 			for ip in review.host_ips():
