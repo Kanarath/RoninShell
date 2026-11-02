@@ -25,6 +25,7 @@ extends RefCounted
 static func tokenize(line: String, env: Object = null) -> Dictionary:
 	var tokens: Array = []
 	var word := ""
+	var glob := false      # la palabra lleva un * o ? sin comillas
 	var in_word := false  # distingue "" (palabra vacía con comillas) de "no hay palabra"
 	var i := 0
 	var n := line.length()
@@ -34,7 +35,8 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 
 		if c == " " or c == "\t":
 			if in_word:
-				tokens.append({"type": "word", "text": word})
+				tokens.append({"type": "word", "text": word, "glob": glob})
+				glob = false
 				word = ""
 				in_word = false
 			i += 1
@@ -100,11 +102,13 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 				for ch: String in outer["value"]:   # sin comillas el valor se parte en palabras
 					if ch == " " or ch == "\t" or ch == "\n":
 						if in_word:
-							tokens.append({"type": "word", "text": word})
+							tokens.append({"type": "word", "text": word, "glob": glob})
+							glob = false
 							word = ""
 							in_word = false
 					else:
 						word += ch
+						glob = glob or ch == "*" or ch == "?"
 						in_word = true
 
 		elif c == "~" and not in_word and env != null and (i + 1 >= n or line[i + 1] in [" ", "\t", "/", "|", ">"]):
@@ -114,7 +118,8 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 
 		elif c == "|" or c == ">":
 			if in_word:
-				tokens.append({"type": "word", "text": word})
+				tokens.append({"type": "word", "text": word, "glob": glob})
+				glob = false
 				word = ""
 				in_word = false
 			if c == "|":
@@ -129,11 +134,13 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 
 		else:
 			word += c
+			glob = glob or c == "*" or c == "?"
 			in_word = true
 			i += 1
 
 	if in_word:
-		tokens.append({"type": "word", "text": word})
+		tokens.append({"type": "word", "text": word, "glob": glob})
+		glob = false
 	return {"tokens": tokens, "error": ""}
 
 

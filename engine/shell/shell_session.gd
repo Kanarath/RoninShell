@@ -10,6 +10,7 @@ const Tokenizer := preload("res://engine/shell/tokenizer.gd")
 const Parser := preload("res://engine/shell/parser.gd")
 const ListParser := preload("res://engine/shell/list_parser.gd")
 const Arithmetic := preload("res://engine/shell/arithmetic.gd")
+const Glob := preload("res://engine/shell/glob.gd")
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
 const CommandDocs := preload("res://engine/commands/command_docs.gd")
@@ -266,7 +267,14 @@ func _run_for(item: Dictionary, out: Dictionary) -> void:
 		if token["type"] != "word":
 			_fail_into(out, "syntax error near unexpected token `%s'" % ("|" if token["type"] == "pipe" else ">"))
 			return
-		words.append(token["text"])
+		var matches: Array = []
+		if token.get("glob", false) and words.size() >= 3:
+			matches = Glob.expand(host.fs, user, cwd, token["text"])
+		if matches.is_empty():
+			words.append(token["text"])
+		else:
+			words.append_array(matches)
+			record("glob_expanded", {"pattern": token["text"], "count": matches.size()})
 	var variable: String = words[1]
 	var values: Array = words.slice(3)
 	if values.size() > MAX_LOOP_ITERATIONS:
@@ -311,8 +319,9 @@ func _run_pipeline(text: String, out: Dictionary) -> void:
 	var stdin := ""
 	var names: Array[String] = []
 	for command: Dictionary in parsed["commands"]:
-		names.append(command["argv"][0])
-		var result := _run_command(command["argv"], stdin)
+		var argv := _expand_globs(command)
+		names.append(argv[0])
+		var result := _run_command(argv, stdin)
 		out["stderr"] += result.stderr
 		var output: String = result.stdout
 		if command["redirect"] != null:
@@ -327,6 +336,25 @@ func _run_pipeline(text: String, out: Dictionary) -> void:
 	out["stdout"] += stdin
 	if names.size() > 1:
 		record("pipeline", {"cmds": "|".join(names)})
+
+
+## Sustituye las palabras con * o ? por los archivos que cumplen el patrón (ordenados). Si no hay
+## ninguno se deja el patrón tal cual, como bash. El nombre del comando no se expande.
+func _expand_globs(command: Dictionary) -> Array:
+	if not command.has("globs"):
+		return command["argv"]
+	var argv: Array = []
+	var marks: Array = command["globs"]
+	for i in command["argv"].size():
+		var word: String = command["argv"][i]
+		if i > 0 and marks[i]:
+			var matches := Glob.expand(host.fs, user, cwd, word)
+			if not matches.is_empty():
+				argv.append_array(matches)
+				record("glob_expanded", {"pattern": word, "count": matches.size()})
+				continue
+		argv.append(word)
+	return argv
 
 
 func _is_assignment_line(text: String) -> bool:
