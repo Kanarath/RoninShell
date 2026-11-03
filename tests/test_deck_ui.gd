@@ -140,3 +140,30 @@ func test_las_ventanas_modales_siguen_abriendo_y_cerrando_con_zoom() -> void:
 	assert_eq(root.settings_panel.frame.scale, Vector2.ONE, "cerrar deja el marco a su tamaño")
 	assert_eq(root.settings_panel.modulate.a, 1.0)
 	_dispose(root)
+
+
+func test_la_vista_ampliada_muestra_detalle_propio_y_lo_limpia() -> void:
+	var root := _main()
+	CutFrame.animate = false
+	for frame: Control in [root._objectives_frame, root._map_frame, root._dossier_frame]:
+		root._open_expanded(frame)
+		assert_true(root.expand_view.is_open())
+		assert_true(root.expand_view._extra != null, "cada panel ampliado trae su detalle")
+		root.expand_view.close()
+		assert_true(root.expand_view._extra == null, "el detalle se descarta al cerrar")
+	assert_true(root._objectives_frame.content.get_parent() == root._objectives_frame.column)
+	assert_true(root._map_frame.content.get_parent() == root._map_frame.column)
+	assert_true(root._dossier_frame.content.get_parent() == root._dossier_frame.column, "el expediente no se mueve: solo se sustituye")
+	CutFrame.animate = true
+	_dispose(root)
+
+
+func test_el_detalle_de_objetivos_incluye_el_contexto_y_las_pistas_abiertas() -> void:
+	var root := _main()
+	var texts: Array = []
+	for label in root._objectives_detail().get_children():
+		texts.append(label.text)
+	var joined := "\n".join(texts)
+	assert_true("CONTEXTO" in joined and "AHORA" in joined)
+	assert_true("Pistas abiertas: 0" in joined)
+	_dispose(root)

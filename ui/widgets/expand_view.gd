@@ -16,6 +16,9 @@ var frame := CutFrame.new()
 var _dim := ColorRect.new()
 var _source: Control = null
 var _content: Control = null
+var _extra: Control = null
+var _replaced := false
+var _content_flag := Control.SIZE_EXPAND_FILL
 var _open := false
 var _tween: Tween = null
 
@@ -40,15 +43,23 @@ func is_open() -> bool:
 
 
 ## Amplía el panel dado (un CutFrame). Si ya hay uno ampliado, no hace nada.
-func open_from(source: Control) -> void:
+## "extra" es un detalle que solo existe en la vista grande (con scroll); con replace = true sustituye al contenido del panel.
+func open_from(source: Control, extra: Control = null, replace := false, content_grows := false) -> void:
 	if _open:
 		return
 	_finish_close()
 	_open = true
 	_source = source
 	_content = source.content
-	source.column.remove_child(_content)
-	frame.column.add_child(_content)
+	_replaced = replace and extra != null
+	if not _replaced:
+		source.column.remove_child(_content)
+		frame.column.add_child(_content)
+		_content_flag = _content.size_flags_vertical
+		_content.size_flags_vertical = Control.SIZE_EXPAND_FILL if (content_grows or extra == null) else Control.SIZE_FILL
+	if extra != null:
+		_extra = _scrolled(extra, _replaced or not content_grows)
+		frame.column.add_child(_extra)
 	frame.title = source.title
 	visible = true
 	opened.emit()
@@ -80,6 +91,17 @@ func toggle() -> void:
 	close()
 
 
+## El detalle va dentro de un scroll para que nunca se salga de la ventana.
+func _scrolled(detail: Control, fill: bool) -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(0, 150)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL if fill else Control.SIZE_FILL
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(detail)
+	return scroll
+
+
 func _target_rect() -> Rect2:
 	var size_px := (size * SHARE).floor()
 	return Rect2(((size - size_px) / 2.0).floor(), size_px)
@@ -107,9 +129,15 @@ func _finish_close() -> void:
 	if _tween != null:
 		_tween.kill()
 		_tween = null
-	if _content != null and _source != null:
+	if _extra != null:
+		frame.column.remove_child(_extra)
+		_extra.queue_free()
+		_extra = null
+	if _content != null and _source != null and not _replaced:
 		frame.column.remove_child(_content)
+		_content.size_flags_vertical = _content_flag
 		_source.column.add_child(_content)
+	_replaced = false
 	_content = null
 	_source = null
 	if visible:

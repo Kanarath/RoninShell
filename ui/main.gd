@@ -110,6 +110,7 @@ var _level_label := Label.new()
 var _xp_bar := ProgressBar.new()
 var _objectives_frame: Control = null
 var _dossier_frame: Control = null
+var _map_frame: Control = null
 var _dossier_grid := GridContainer.new()
 
 
@@ -168,7 +169,13 @@ func _ready() -> void:
 			show_menu = true
 		elif arg == "--open=expand":
 			show_menu = false
-			expand_view.open_from.call_deferred(_objectives_frame)
+			_open_expanded.call_deferred(_objectives_frame)
+		elif arg == "--open=expand-map":
+			show_menu = false
+			_open_expanded.call_deferred(_map_frame)
+		elif arg == "--open=expand-dossier":
+			show_menu = false
+			_open_expanded.call_deferred(_dossier_frame)
 		elif arg == "--open=boot":
 			boot_forced = true
 			show_menu = true
@@ -1173,6 +1180,7 @@ func _build_objectives_panel() -> Control:
 func _build_map_panel() -> Control:
 	var frame := CutFrame.new()
 	frame.name = "Map"
+	_map_frame = frame
 	frame.title = "Mapa de red"
 	_make_expandable(frame)
 	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1216,9 +1224,94 @@ func _evidence_card(label: String, collected: bool) -> Control:
 	return card
 
 
+## Abre la vista ampliada de un panel con su detalle propio (el panel solo muestra lo esencial).
+func _open_expanded(frame: Control) -> void:
+	if frame == _objectives_frame:
+		expand_view.open_from(frame, _objectives_detail())
+	elif frame == _map_frame:
+		expand_view.open_from(frame, _map_detail(), false, true)
+	else:
+		expand_view.open_from(frame, _dossier_detail(), true)
+
+
+func _detail_box() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	return box
+
+
+func _wrapped(text: String, color: Color, font_size: int) -> Label:
+	var label := _colored_label(text, color, font_size)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return label
+
+
+## Contexto de la misión, el objetivo de ahora completo y las pistas que ya has abierto.
+func _objectives_detail() -> Control:
+	var box := _detail_box()
+	if controller.mode != "mision" or mission_engine.is_finished():
+		box.add_child(_wrapped("Cuando haya una misión en curso, aquí verás su contexto, el objetivo de ahora y las pistas que hayas abierto.", Palette.TEXT_DIM, 14))
+		return box
+	box.add_child(_wrapped("CONTEXTO", Palette.GOLD, 12))
+	box.add_child(_wrapped(mission_engine.current_mission().get("briefing", ""), Palette.TEXT, 15))
+	var active: Dictionary = mission_engine.active_objective()
+	if active.is_empty():
+		return box
+	box.add_child(_wrapped("AHORA", Palette.GOLD, 12))
+	box.add_child(_wrapped(active["text"], Palette.TEXT_TITLE, 16))
+	box.add_child(_wrapped("Concepto: %s" % str(active["concept"]).replace("_", " "), Palette.TEAL, 13))
+	var shown: int = mission_engine.hints_used(active["id"])
+	var hints: Array = active.get("hints", [])
+	box.add_child(_wrapped("Pistas abiertas: %d de %d  (escribe  pista  para abrir la siguiente)" % [shown, hints.size()], Palette.TEXT_DIM, 13))
+	for i in mini(shown, hints.size()):
+		box.add_child(_wrapped("%d. %s" % [i + 1, hints[i]], Palette.TEXT, 14))
+	return box
+
+
+## Cada host de la red: lo que sabes de él (o que aún no lo has descubierto).
+func _map_detail() -> Control:
+	var box := _detail_box()
+	box.add_child(_wrapped("HOSTS DE LA RED", Palette.GOLD, 12))
+	var known: Array = network_map.discovered_ips()
+	for ip: String in world.host_ips():
+		var host = world.hosts[ip]
+		if ip == world.player_host_ip:
+			box.add_child(_wrapped("%s  (%s)  ·  tu máquina" % [host.hostname, ip], Palette.GOLD, 15))
+		elif ip in known:
+			var ports: Dictionary = network_map.ports_seen(ip)
+			var parts: Array = []
+			var numbers: Array = ports.keys()
+			numbers.sort()
+			for port: int in numbers:
+				parts.append("%d %s" % [port, ports[port]])
+			box.add_child(_wrapped("%s  (%s)" % [host.hostname, ip], Palette.TEXT, 15))
+			box.add_child(_wrapped("   puertos vistos: %s" % (", ".join(parts) if not parts.is_empty() else "ninguno todavía (prueba con nmap)"), Palette.TEXT_DIM, 13))
+		else:
+			box.add_child(_wrapped("??? sin descubrir  (usa ping o nmap para encontrarlo)", Palette.TEAL_DIM, 14))
+	return box
+
+
+## Todas las evidencias del libro: las conseguidas con su detalle y las que faltan en gris.
+func _dossier_detail() -> Control:
+	var box := _detail_box()
+	var cards: Array = main_engine.evidence_cards()
+	var got := 0
+	for card: Dictionary in cards:
+		if card["collected"]:
+			got += 1
+	box.add_child(_wrapped("EVIDENCIAS  %d de %d" % [got, cards.size()], Palette.GOLD, 12))
+	for card: Dictionary in cards:
+		if card["collected"]:
+			box.add_child(_wrapped(card["title"], Palette.TEXT_TITLE, 15))
+			box.add_child(_wrapped("   " + str(card.get("detail", "")), Palette.TEXT_DIM, 13))
+		else:
+			box.add_child(_wrapped("?  sin conseguir", Palette.TEAL_DIM, 14))
+	return box
+
+
 func _make_expandable(frame: Control) -> void:
 	frame.expandable = true
-	frame.expand_requested.connect(expand_view.open_from.bind(frame))
+	frame.expand_requested.connect(_open_expanded.bind(frame))
 
 
 func _build_overlay() -> void:
