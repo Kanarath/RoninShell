@@ -100,6 +100,7 @@ var deck_frame := DeckFrame.new()
 var fx_layer := FxLayer.new()
 var expand_view := ExpandView.new()
 var _menu_after_boot := false
+var _shown_level := 0
 var _menu_return := false
 var break_reminder := BreakReminder.new()
 var _settings_store := SettingsStore.new()
@@ -200,6 +201,7 @@ func _play_boot() -> void:
 	boot_screen = BootScreen.new()
 	boot_screen.vfx = settings.vfx_enabled
 	boot_screen.finished.connect(_on_boot_finished)
+	boot_screen.sound_requested.connect(_play_sound)
 	add_child(boot_screen)
 	move_child(_overlay, -1)   # el velo CRT sigue por encima de todo
 	terminal.typing_enabled = false
@@ -300,6 +302,7 @@ func _build_modals() -> void:
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
 	editor_panel.saved.connect(_on_file_saved)
+	expand_view.opened.connect(_play_sound.bind("clic"))
 	tutorial_panel.finished.connect(_on_tutorial_finished)
 	_sound_player.bus = "Master"
 	add_child(_sound_player)
@@ -932,6 +935,17 @@ func _react(line: String, result: RefCounted) -> void:
 		deck_frame.blink_led(0)
 
 
+## Subida de nivel: cartel dorado, chispas y campanilla. Sin pausas ni bloqueos.
+func _level_up(level: int) -> void:
+	_play_sound("nivel")
+	mascot.react("happy", 4.0)
+	fx_layer.banner("NIVEL %d" % level)
+	var center := get_viewport_rect().size / 2.0
+	fx_layer.burst(center + Vector2(-120, -40), Palette.GOLD, 40)
+	fx_layer.burst(center + Vector2(120, -40), Palette.TEAL, 40)
+	deck_frame.blink_led(2)
+
+
 ## Redibuja los paneles que dependen del progreso: misión, objetivos, XP y evidencias.
 func _refresh_missions() -> void:
 	if mission_engine == null:
@@ -948,6 +962,9 @@ func _refresh_missions() -> void:
 				_mission_label.text = "MISIÓN %d  ·  %s" % [mission_engine.mission_index + 1, mission_engine.current_mission()["title"].to_upper()]
 	# El nivel y el XP son siempre los de tu progreso real, también durante un repaso.
 	_level_label.text = "NV %d" % main_engine.level()
+	if _shown_level > 0 and main_engine.level() > _shown_level:
+		_level_up(main_engine.level())
+	_shown_level = main_engine.level()
 	_xp_bar.value = main_engine.level_progress() * 100.0
 	_rebuild_objectives()
 	_rebuild_dossier()

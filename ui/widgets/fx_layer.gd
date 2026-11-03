@@ -56,6 +56,35 @@ func burst(at: Vector2, color: Color, amount := 28) -> void:
 	add_child(particles)
 
 
+## Cartel dorado que sube y se desvanece (subida de nivel). No bloquea nada.
+func banner(text: String, color: Color = Palette.GOLD) -> void:
+	if not enabled or not is_inside_tree():
+		return
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 46)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Palette.BG)
+	label.add_theme_constant_override("outline_size", 8)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	label.size = Vector2(500, 64)
+	label.position = Vector2(size.x / 2.0 - 250.0, size.y * 0.30)
+	label.pivot_offset = label.size / 2.0
+	label.scale = Vector2(0.6, 0.6)
+	label.modulate.a = 0.0
+	add_child(label)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 1.0, 0.25)
+	tween.chain().tween_interval(0.9)
+	tween.chain().tween_property(label, "modulate:a", 0.0, 0.5)
+	tween.chain().tween_property(label, "position:y", label.position.y - 30.0, 0.5)
+	tween.chain().tween_callback(label.queue_free)
+
+
 func _process(delta: float) -> void:
 	for ripple_data: Dictionary in _ripples:
 		ripple_data["age"] += delta

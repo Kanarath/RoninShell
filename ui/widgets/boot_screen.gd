@@ -4,6 +4,7 @@ extends Control
 ## Cualquier tecla o clic lo salta. Sin efectos (ajuste de accesibilidad) se muestra ya abierto y breve.
 
 signal finished
+signal sound_requested(sound_name: String)
 
 const Palette := preload("res://ui/theme/palette.gd")
 const SpriteStore := preload("res://ui/sprite_store.gd")
@@ -166,8 +167,10 @@ func play() -> void:
 	# Se encienden los LEDs de uno en uno.
 	for i in _leds.size():
 		_tween.tween_callback(_set_led.bind(i, true))
+		_tween.tween_callback(sound_requested.emit.bind("encendido"))
 		_tween.tween_interval(0.14)
 	_tween.tween_interval(0.2)
+	_tween.tween_callback(sound_requested.emit.bind("compuerta"))
 	_tween.tween_method(_set_open, 0.0, 1.0, 1.1).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_tween.tween_interval(0.2)
 	# La barra avanza a trompicones, como cargando módulos de verdad.

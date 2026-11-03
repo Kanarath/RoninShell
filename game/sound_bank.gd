@@ -10,6 +10,11 @@ const SOUNDS := {
 	"objetivo": [[659.0, 90], [880.0, 170]],
 	"mision": [[523.0, 90], [659.0, 90], [784.0, 90], [1047.0, 280]],
 	"logro": [[784.0, 90], [1047.0, 90], [1319.0, 300]],
+	# Sonidos del cyberdeck: interruptor, compuertas y subida de nivel (todos suaves y cortos).
+	"clic": [[1500.0, 22], [900.0, 30]],
+	"encendido": [[587.0, 60]],
+	"compuerta": [[110.0, 150], [82.0, 260]],
+	"nivel": [[523.0, 80], [659.0, 80], [784.0, 80], [1047.0, 80], [1319.0, 360]],
 }
 
 

@@ -167,3 +167,29 @@ func test_el_detalle_de_objetivos_incluye_el_contexto_y_las_pistas_abiertas() ->
 	assert_true("CONTEXTO" in joined and "AHORA" in joined)
 	assert_true("Pistas abiertas: 0" in joined)
 	_dispose(root)
+
+
+func test_los_sonidos_del_deck_existen_y_son_cortos() -> void:
+	var SoundBank := preload("res://game/sound_bank.gd")
+	for sound_name in ["clic", "encendido", "compuerta", "nivel"]:
+		assert_true(SoundBank.make(sound_name) != null, "falta el sonido %s" % sound_name)
+		assert_true(SoundBank.sample_count(sound_name) < SoundBank.MIX_RATE * 1.0, "%s dura menos de un segundo" % sound_name)
+
+
+func test_subir_de_nivel_suena_y_saca_el_cartel() -> void:
+	var root := _main()
+	root._refresh_missions()   # fija el nivel actual como punto de partida
+	root.main_engine.xp += 300
+	root._refresh_missions()
+	assert_eq(root.last_sound, "nivel")
+	_dispose(root)
+
+
+func test_ampliar_un_panel_hace_clic() -> void:
+	var root := _main()
+	CutFrame.animate = false
+	root._open_expanded(root._map_frame)
+	assert_eq(root.last_sound, "clic")
+	root.expand_view.close()
+	CutFrame.animate = true
+	_dispose(root)

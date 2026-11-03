@@ -73,7 +73,7 @@ func test_los_sonidos_existen_y_son_cortos() -> void:
 		assert_true(stream != null, sound_name)
 		assert_eq(stream.data.size(), SoundBank.sample_count(sound_name) * 2)
 		var seconds := float(SoundBank.sample_count(sound_name)) / SoundBank.MIX_RATE
-		assert_true(seconds > 0.1 and seconds < 1.0, "%s dura %.2f s" % [sound_name, seconds])
+		assert_true(seconds > 0.04 and seconds < 1.0, "%s dura %.2f s" % [sound_name, seconds])
 	assert_true(SoundBank.make("no_existe") == null)
 
 

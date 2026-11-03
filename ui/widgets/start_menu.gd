@@ -113,7 +113,22 @@ func open_menu(can_continue: bool, summary_text := "") -> void:
 	summary.text = summary_text
 	_cancel_confirm()
 	visible = true
+	_slide_in()
 	(continue_button if can_continue else new_game_button).grab_focus.call_deferred()
+
+
+## Los botones entran uno tras otro, deslizándose un poco (solo con efectos activos).
+func _slide_in() -> void:
+	var CutFrame := preload("res://ui/widgets/cut_frame.gd")
+	if not CutFrame.animate or not is_inside_tree():
+		return
+	var index := 0
+	for child: Control in _buttons.get_children():
+		child.modulate.a = 0.0
+		var tween := create_tween()
+		tween.tween_interval(0.05 * index)
+		tween.tween_property(child, "modulate:a", 1.0, 0.22)
+		index += 1
 
 
 func close_menu() -> void:
