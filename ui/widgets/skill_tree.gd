@@ -30,6 +30,13 @@ func level_of(concept: String) -> String:
 	return levels.get(concept, "")
 
 
+func _widest_row() -> int:
+	var widest := 0
+	for group: Dictionary in Profile.TREE:
+		widest = maxi(widest, group["concepts"].size())
+	return widest
+
+
 func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var row_height := size.y / Profile.TREE.size()
@@ -38,7 +45,7 @@ func _draw() -> void:
 		var top := row * row_height
 		draw_string(font, Vector2(4, top + 16), str(group["title"]).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Palette.GOLD)
 		var concepts: Array = group["concepts"]
-		var step := size.x / 5.0   # hasta cinco conceptos por fila
+		var step := size.x / float(maxi(5, _widest_row()))   # los conceptos de la fila más larga caben en el ancho
 		var y := top + row_height * 0.52
 		# Líneas primero, para que los nodos queden encima.
 		for i in range(1, concepts.size()):

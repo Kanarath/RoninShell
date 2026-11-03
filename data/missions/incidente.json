@@ -1,0 +1,211 @@
+{
+	"id": "incidente",
+	"title": "Triaje de un incidente",
+	"lab": "incidente",
+	"missions": [
+		{
+			"id": "i1_triaje",
+			"title": "Primer triaje",
+			"briefing": "Triaje significa ordenar lo urgente de lo que no lo es. Ha saltado un aviso en un servidor propio: la cuenta de servicio svc-backup hizo cosas raras de madrugada. Antes de sacar conclusiones, lees el registro, cuentas lo que ves y separas los hechos de las suposiciones. Todo ocurre en tu servidor y sobre su propio registro.",
+			"objectives": [
+				{
+					"id": "i1_alcance",
+					"text": "Lee la nota del cliente: qué avisó la monitorización y qué se revisa",
+					"short": "Lee el alcance del aviso",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de investigar, confirma qué se te pide y hasta dónde llegas.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: se revisa solo el registro de este servidor, sin dramatizar."
+					]
+				},
+				{
+					"id": "i2_leer",
+					"text": "Lee el registro de seguridad /var/log/app/security.log",
+					"short": "Lee security.log",
+					"concept": "analisis_logs",
+					"requires": ["i1_alcance"],
+					"check": {"event": "file_read", "where": {"path": "/var/log/app/security.log"}},
+					"hints": [
+						"Los registros de la aplicación están bajo /var/log.",
+						"Mira dentro de /var/log/app.",
+						"`cat /var/log/app/security.log`: cada línea trae hora, nivel (INFO o WARN), qué pasó y quién."
+					]
+				},
+				{
+					"id": "i3_resumen",
+					"text": "Cuenta cuántas veces aparece cada IP en ips_origen.txt con `sort` y `uniq -c`",
+					"short": "Cuenta las IP de origen",
+					"concept": "analisis_logs",
+					"requires": ["i2_leer"],
+					"check": {"event": "pipeline", "contains": {"cmds": ["sort", "uniq"]}},
+					"evidence": {"id": "evi_ips", "title": "IP de origen", "detail": "198.51.100.44 aparece 5 veces; el resto son direcciones internas 10.0.8.x"},
+					"hints": [
+						"uniq solo junta líneas repetidas que están seguidas, así que antes hay que ordenar.",
+						"Combina sort y uniq con una tubería; -c añade el recuento.",
+						"`sort ips_origen.txt | uniq -c` (y si quieres lo más frecuente arriba, añade `| sort -r`)."
+					]
+				},
+				{
+					"id": "i4_hecho",
+					"text": "Anota con la clasificación correcta lo que SÍ está comprobado sobre la cuenta svc-backup y la IP 198.51.100.44 (`hallazgo`)",
+					"short": "Anota el hecho comprobado",
+					"concept": "analisis_hallazgos",
+					"requires": ["i3_resumen"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["198.51.100.44"]}},
+					"classify": {
+						"keywords": ["198.51.100.44"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: está escrito en el registro y cualquiera puede comprobarlo. Eso es un hecho; lo que significa es otra cuestión.",
+						"feedback": {
+							"indicio": "Aquí no hay nada indirecto: las líneas del registro lo dicen tal cual.",
+							"hipotesis": "No es una suposición: es lo que el registro muestra. Las suposiciones van sobre el porqué.",
+							"falso-positivo": "No lo es: los eventos están en el registro, ocurrieron."
+						}
+					},
+					"hints": [
+						"Lo comprobado es lo que puedes enseñar con una línea del registro.",
+						"Por ejemplo: desde qué IP y qué hizo svc-backup tras los fallos.",
+						"`hallazgo confirmado \"svc-backup falló 3 veces y entró desde 198.51.100.44 a las 03:12\"`"
+					]
+				},
+				{
+					"id": "i5_causa",
+					"text": "Anota con la clasificación correcta una posible CAUSA que explicaría el aviso, sin haberla comprobado (`hallazgo`): cómo pudo obtener alguien la contraseña de la cuenta",
+					"short": "Anota la causa como suposición",
+					"concept": "analisis_hallazgos",
+					"requires": ["i4_hecho"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["hipotesis", "indicio"]}, "contains": {"text": ["contraseña"]}},
+					"classify": {
+						"keywords": ["contraseña", "credencial", "adivin"],
+						"accepted": ["hipotesis", "indicio"],
+						"ok": "Bien: el registro no dice cómo se consiguió la contraseña, así que es una suposición que hay que comprobar. Los 3 fallos seguidos son un indicio, no una prueba.",
+						"feedback": {
+							"confirmado": "Todavía no: el registro no muestra cómo se obtuvo la contraseña. Afirmarlo sin pruebas sería inventar.",
+							"falso-positivo": "No hay base para descartarlo: la cuenta falló tres veces y entró desde una IP externa."
+						}
+					},
+					"hints": [
+						"Piensa en lo que NO está en el registro: el porqué.",
+						"Si no puedes demostrarlo con una línea, no es un hecho.",
+						"`hallazgo hipotesis \"alguien pudo adivinar o reutilizar la contraseña de svc-backup\"`"
+					]
+				}
+			]
+		},
+		{
+			"id": "i2_automatizar",
+			"title": "Automatizar el triaje",
+			"briefing": "Contar a mano cada patrón cansa. Ahora conviertes lo que repites en una función y eliges qué hacer con `case`, que decide según el valor de una palabra. Lo mismo que harías cada guardia, escrito una sola vez.",
+			"objectives": [
+				{
+					"id": "i6_funcion",
+					"text": "Define una función que cuente las líneas de security.log que contienen lo que le pases ($1)",
+					"short": "Define una función de recuento",
+					"concept": "funciones_shell",
+					"check": {"event": "function_defined"},
+					"hints": [
+						"Una función es un bloque con nombre: nombre() { comandos; }. El primer argumento es $1.",
+						"grep -c cuenta líneas. Quieres que busque $1 dentro de /var/log/app/security.log.",
+						"`contar() { grep -c \"$1\" /var/log/app/security.log; }`"
+					]
+				},
+				{
+					"id": "i7_usar",
+					"text": "Llama a tu función al menos dos veces con patrones distintos (por ejemplo, el de los fallos y el de una IP)",
+					"short": "Usa tu función",
+					"concept": "funciones_shell",
+					"requires": ["i6_funcion"],
+					"check": {"event": "function_called", "min": 2},
+					"hints": [
+						"Se llama como un comando, con los argumentos detrás.",
+						"Prueba con `failed` y con `198.51.100.44`.",
+						"`contar failed` y `contar 198.51.100.44`: dan 5 y 5."
+					]
+				},
+				{
+					"id": "i8_case",
+					"text": "Recorre eventos.txt con un `for` y decide con `case` qué hacer con cada palabra (al menos tres ramas distintas ejecutadas)",
+					"short": "Clasifica con case",
+					"concept": "seleccion_case",
+					"requires": ["i6_funcion"],
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/home/ronin/eventos.txt"}},
+						{"event": "case_ran", "min": 3}
+					]},
+					"evidence": {"id": "evi_case", "title": "Triaje automatizado", "detail": "for + case clasificaron los tipos de evento de security.log"},
+					"hints": [
+						"case compara una palabra con patrones: case $x in a) ...;; b|c) ...;; *) ...;; esac.",
+						"for e in $(cat eventos.txt); do ...; done te da cada palabra en $e.",
+						"`for e in $(cat eventos.txt); do case $e in login) echo vigilar;; export) echo revisar;; *) echo normal;; esac; done`"
+					]
+				},
+				{
+					"id": "i9_transfer",
+					"text": "Transferencia: usa tu función dentro de un `for` para contar cada palabra de eventos.txt",
+					"short": "Transferencia: función dentro de un for",
+					"concept": "funciones_shell",
+					"transfer": true,
+					"requires": ["i7_usar", "i8_case"],
+					"check": {"all": [
+						{"event": "loop_ran"},
+						{"event": "function_called", "min": 6}
+					]},
+					"hints": [
+						"Es lo mismo que antes, pero la función se llama dentro del bucle.",
+						"for e in $(cat eventos.txt); do contar $e; done",
+						"`for e in $(cat eventos.txt); do echo $e; contar $e; done`"
+					]
+				}
+			]
+		},
+		{
+			"id": "i3_cierre",
+			"title": "Verificar y proponer medidas",
+			"briefing": "Para cerrar el triaje compruebas con un `if` el dato clave y escribes un informe corto: lo comprobado por un lado, lo supuesto por otro y qué medidas propones. Los dos primeros se separan con claridad; el tercero, sin alarmismo.",
+			"objectives": [
+				{
+					"id": "i10_verificar",
+					"text": "Comprueba con un `if` que la IP externa aparece en el registro y que el comando responde según el caso",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["i3_resumen"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"Un if ejecuta una rama u otra según el código de salida de grep.",
+						"if grep 'texto' archivo; then echo ...; else echo ...; fi",
+						"`if grep -c 198.51.100.44 /var/log/app/security.log; then echo presente; else echo ausente; fi`"
+					]
+				},
+				{
+					"id": "i11_informe",
+					"text": "Redacta en informe/borrador.md qué ocurrió, dónde, la evidencia, el riesgo, lo que NO se puede confirmar y las medidas propuestas, y supera la revisión (`revisar`)",
+					"short": "Informe de triaje",
+					"concept": "informe",
+					"requires": ["i5_causa", "i7_usar", "i10_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 160,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué: lo que ocurrió", "any": ["svc-backup", "inicio de sesión", "exportación", "cuenta de servicio"]},
+							{"id": "donde", "label": "Dónde: servidor y registro", "any": ["security.log", "nodo-alerta"]},
+							{"id": "evidencia", "label": "Evidencia: datos del registro", "any": ["198.51.100.44", "3 intentos", "tres intentos", "48210", "03:12"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "fuga", "datos", "acceso no autorizado"]},
+							{"id": "limites", "label": "Límites: lo que no está confirmado", "any": ["no se puede confirmar", "no está confirmado", "hipótesis", "podría", "posible", "no sabemos"]},
+							{"id": "medidas", "label": "Medidas: qué hacer ahora", "any": ["restablecer", "rotar", "cambiar la contraseña", "bloquear", "doble factor", "mfa", "revocar", "claves"]}
+						]
+					},
+					"evidence": {"id": "evi_informe_incidente", "title": "Informe de triaje", "detail": "borrador.md separa hechos, límites y medidas"},
+					"hints": [
+						"Un buen informe responde: qué, dónde, evidencia, riesgo, qué no se sabe y qué medidas. Sin afirmar lo que no probaste.",
+						"Escríbelo con `nano informe/borrador.md` y comprueba con `revisar` qué falta.",
+						"Ejemplo: \"En nodo-alerta, security.log muestra que svc-backup falló 3 veces y entró desde 198.51.100.44 a las 03:12, y después hubo una exportación de 48210 filas y un restablecimiento de contraseña. Riesgo: acceso no autorizado y fuga de datos. No se puede confirmar cómo se obtuvo la contraseña (hipótesis). Medidas: restablecer y rotar la contraseña de svc-backup, bloquear la IP externa y activar doble factor.\""
+					]
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,58 @@
+{
+	"id": "incidente",
+	"title": "Triaje de un incidente",
+	"cidr": "10.0.8.0/24",
+	"player_host": "10.0.8.2",
+	"hosts": [
+		{
+			"ip": "10.0.8.2",
+			"hostname": "nodo-alerta",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/var": {"type": "dir"},
+				"/var/log": {"type": "dir"},
+				"/var/log/app": {"type": "dir"},
+				"/var/log/app/security.log": {
+					"type": "file",
+					"content": "2026-11-03 02:58:10 INFO login ok user=marta ip=10.0.8.15\n2026-11-03 03:12:41 WARN login failed user=svc-backup ip=198.51.100.44\n2026-11-03 03:12:44 WARN login failed user=svc-backup ip=198.51.100.44\n2026-11-03 03:12:47 WARN login failed user=svc-backup ip=198.51.100.44\n2026-11-03 03:12:52 INFO login ok user=svc-backup ip=198.51.100.44\n2026-11-03 03:13:30 INFO export started user=svc-backup rows=48210\n2026-11-03 03:14:02 INFO export finished user=svc-backup rows=48210\n2026-11-03 03:20:15 WARN password reset requested user=svc-backup ip=198.51.100.44\n2026-11-03 08:01:02 INFO login ok user=luis ip=10.0.8.21\n2026-11-03 08:15:44 WARN login failed user=luis ip=10.0.8.21\n2026-11-03 08:15:50 INFO login ok user=luis ip=10.0.8.21\n2026-11-03 09:30:00 INFO config changed user=marta key=backup_schedule\n2026-11-03 10:02:19 INFO login ok user=ana ip=10.0.8.33\n2026-11-03 11:45:08 WARN login failed user=ana ip=10.0.8.33\n2026-11-03 11:45:20 INFO login ok user=ana ip=10.0.8.33\n2026-11-03 13:10:05 INFO export started user=marta rows=120\n2026-11-03 13:10:07 INFO export finished user=marta rows=120\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "TRIAJE DE UN AVISO (defensivo)\nServidor propio: nodo-alerta. El sistema de monitorización avisó de actividad rara de la cuenta de servicio svc-backup esta madrugada.\nSe trabaja SOLO sobre el registro /var/log/app/security.log de este servidor. No se toca nada en otros equipos.\nObjetivo: separar lo comprobado de lo supuesto, resumirlo y proponer medidas. Sin dramatizar.\n"
+				},
+				"/home/ronin/ips_origen.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "10.0.8.15\n198.51.100.44\n10.0.8.21\n198.51.100.44\n10.0.8.33\n198.51.100.44\n10.0.8.21\n198.51.100.44\n10.0.8.33\n10.0.8.21\n198.51.100.44\n10.0.8.33\n"
+				},
+				"/home/ronin/eventos.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "login\nexport\npassword\nconfig\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de triaje\n\nPendiente de completar.\n"
+				}
+			}
+		}
+	]
+}

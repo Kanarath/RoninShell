@@ -8,7 +8,7 @@ const TREE := [
 	{"title": "Redes y reconocimiento", "concepts": [["descubrimiento_hosts", "Descubrir"], ["puertos_servicios", "Puertos"], ["versiones", "Versiones"], ["interpretacion_resultados", "Interpretar"]]},
 	{"title": "Web", "concepts": [["http", "HTTP"], ["cabeceras_http", "Cabeceras"], ["cookies_sesiones", "Cookies"], ["control_acceso", "Acceso"]]},
 	{"title": "Análisis e informe", "concepts": [["alcance", "Alcance"], ["analisis_hallazgos", "Hallazgos"], ["analisis_logs", "Logs"], ["informe", "Informe"]]},
-	{"title": "Automatización", "concepts": [["tuberias", "Tuberías"], ["variables_shell", "Variables"], ["bucles", "Bucles"], ["encadenar_comandos", "Encadenar"], ["comodines", "Comodines"]]},
+	{"title": "Automatización", "concepts": [["tuberias", "Tuberías"], ["variables_shell", "Variables"], ["bucles", "Bucles"], ["encadenar_comandos", "Encadenar"], ["comodines", "Comodines"], ["funciones_shell", "Funciones"], ["seleccion_case", "Case"]]},
 	{"title": "Defensa y configuración", "concepts": [["configuracion_segura", "Configurar"], ["datos_sensibles", "Datos"], ["verificacion", "Verificar"]]},
 ]
 

@@ -580,6 +580,55 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_funciones",
+			"concept": "funciones_shell",
+			"lab": "repaso_logs",
+			"title": "Repaso: funciones",
+			"briefing": "Otro servidor, otro registro: /var/log/app/error.log. Vuelve a empaquetar lo que repites en una función y úsala con dos patrones distintos.",
+			"objectives": [
+				{
+					"id": "r_fun_usar",
+					"text": "Define una función que cuente las líneas de /var/log/app/error.log con el texto que le pases ($1) y llámala con dos patrones distintos",
+					"short": "Una función, dos llamadas",
+					"concept": "funciones_shell",
+					"check": {"all": [
+						{"event": "function_defined"},
+						{"event": "function_called", "min": 2},
+						{"event": "file_read", "where": {"path": "/var/log/app/error.log"}}
+					]},
+					"hints": [
+						"Una función es nombre() { comandos; } y su primer argumento es $1.",
+						"grep -c cuenta líneas; ponlo dentro de la función con $1 como patrón y llámala dos veces.",
+						"`contar() { grep -c \"$1\" /var/log/app/error.log; }` y luego `contar timeout` y `contar ERROR`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_case",
+			"concept": "seleccion_case",
+			"lab": "repaso_logs",
+			"title": "Repaso: case",
+			"briefing": "En servicios.txt están los servicios del servidor. Recórrelos con un for y decide con case qué prioridad le das a cada uno.",
+			"objectives": [
+				{
+					"id": "r_case_servicios",
+					"text": "Recorre servicios.txt con un `for` y usa `case` para dar una prioridad distinta según el servicio (al menos tres ramas ejecutadas)",
+					"short": "for + case sobre los servicios",
+					"concept": "seleccion_case",
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/home/ronin/servicios.txt"}},
+						{"event": "case_ran", "min": 3}
+					]},
+					"hints": [
+						"case compara una palabra con patrones: case $x in a) ...;; *) ...;; esac.",
+						"for s in $(cat servicios.txt); do ...; done te da cada servicio en $s.",
+						"`for s in $(cat servicios.txt); do case $s in pagos) echo critico;; inventario) echo vigilar;; *) echo normal;; esac; done`"
+					]
+				}
+			]
 		}
 	]
 }

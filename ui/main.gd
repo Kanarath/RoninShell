@@ -49,6 +49,7 @@ const CAMPAIGN := [
 	{"id": "tienda_web", "book": "res://data/missions/tienda_web.json"},
 	{"id": "guardia_logs", "book": "res://data/missions/guardia_logs.json"},
 	{"id": "endurecimiento", "book": "res://data/missions/endurecimiento.json"},
+	{"id": "incidente", "book": "res://data/missions/incidente.json"},
 ]
 
 ## Lo "activo" (el laboratorio, la sesión y el motor que se ven ahora). Durante un repaso apuntan
