@@ -165,6 +165,73 @@ func all_paths() -> Array[String]:
 	return paths
 
 
+## Borra un archivo o un directorio vacío. Falso si no existe, es la raíz o el directorio tiene contenido.
+func remove(path: String) -> bool:
+	if path == "/" or not _nodes.has(path):
+		return false
+	if is_dir(path) and not list_dir(path).is_empty():
+		return false
+	_nodes.erase(path)
+	return true
+
+
+## Borra un directorio con todo lo que contiene (nunca la raíz). Devuelve cuántos nodos se borraron.
+func remove_tree(path: String) -> int:
+	if path == "/" or not _nodes.has(path):
+		return 0
+	var doomed: Array[String] = []
+	for candidate: String in _nodes:
+		if candidate == path or candidate.begins_with(path + "/"):
+			doomed.append(candidate)
+	for candidate in doomed:
+		_nodes.erase(candidate)
+	return doomed.size()
+
+
+## Copia un archivo a otra ruta (el destino no puede existir). La copia conserva el modo y cambia de dueño.
+func copy_file(source: String, target: String, owner: String, group: String) -> bool:
+	if not is_file(source):
+		return false
+	var info: Dictionary = _nodes[source]
+	return add_file(target, info["content"], owner, group, str(info["mode"]))
+
+
+## Copia un directorio con todo su contenido bajo otra ruta nueva. Devuelve cuántos nodos se crearon.
+func copy_tree(source: String, target: String, owner: String, group: String) -> int:
+	if not is_dir(source) or exists(target) or not is_dir(target.get_base_dir()):
+		return 0
+	if target == source or target.begins_with(source + "/"):
+		return 0   # no se puede copiar un directorio dentro de sí mismo
+	var made := 0
+	var paths: Array[String] = []
+	for candidate: String in _nodes:
+		if candidate == source or candidate.begins_with(source + "/"):
+			paths.append(candidate)
+	paths.sort()   # los padres antes que los hijos
+	for path in paths:
+		var info: Dictionary = _nodes[path]
+		var destination := target + path.substr(source.length())
+		var created := add_dir(destination, owner, group, str(info["mode"])) if info["type"] == "dir" else add_file(destination, info["content"], owner, group, str(info["mode"]))
+		made += 1 if created else 0
+	return made
+
+
+## Mueve (renombra) un archivo o un directorio con su contenido. El destino no puede existir.
+func move(source: String, target: String) -> bool:
+	if source == "/" or not _nodes.has(source) or exists(target) or not is_dir(target.get_base_dir()):
+		return false
+	if target == source or target.begins_with(source + "/"):
+		return false
+	var moved: Array[String] = []
+	for candidate: String in _nodes:
+		if candidate == source or candidate.begins_with(source + "/"):
+			moved.append(candidate)
+	for path in moved:
+		_nodes[target + path.substr(source.length())] = _nodes[path]
+		_nodes.erase(path)
+	return true
+
+
 func _add(path: String, node: Dictionary) -> bool:
 	if normalize("/", path) != path or path == "/":
 		return false  # solo rutas absolutas ya limpias
