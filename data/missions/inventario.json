@@ -1,0 +1,210 @@
+{
+	"id": "inventario",
+	"title": "Inventario y exposición",
+	"lab": "inventario",
+	"missions": [
+		{
+			"id": "v1_inventariar",
+			"title": "Inventariar lo que hay",
+			"briefing": "No se puede proteger lo que no se sabe que existe. Tu red propia (10.0.11.0/24) debería ofrecer solo lo que figura en el inventario. Primero miras qué ofrece de verdad y lo guardas, para poder compararlo. Todo es tu propia red autorizada.",
+			"objectives": [
+				{
+					"id": "v1_alcance",
+					"text": "Lee la nota del cliente: qué red se revisa y con qué reglas",
+					"short": "Lee el alcance",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de escanear nada, confirma que la red es tuya o está autorizada.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: solo la red 10.0.11.0/24, y las correcciones sobre copias."
+					]
+				},
+				{
+					"id": "v2_hosts",
+					"text": "Descubre qué equipos hay en la red autorizada con un escaneo de toda la red (nmap sobre 10.0.11.0/24)",
+					"short": "Descubre los equipos de la red",
+					"concept": "descubrimiento_hosts",
+					"requires": ["v1_alcance"],
+					"check": {"event": "host_discovered", "distinct": "ip", "min": 3},
+					"hints": [
+						"Un escaneo con la notación de red (CIDR) recorre todas las direcciones del rango.",
+						"nmap acepta 10.0.11.0/24 como objetivo.",
+						"`nmap 10.0.11.0/24` lista cada equipo y sus puertos abiertos."
+					]
+				},
+				{
+					"id": "v3_guardar",
+					"text": "Guarda en actual.txt solo las líneas de equipos y de puertos abiertos del escaneo (filtra con grep y redirige con >)",
+					"short": "Guarda el estado actual",
+					"concept": "inventario",
+					"requires": ["v2_hosts"],
+					"check": {"all": [
+						{"event": "file_written", "where": {"path": "/home/ronin/actual.txt"}, "contains": {"text": ["open", "report"]}},
+						{"event": "pipeline", "contains": {"cmds": ["nmap", "grep"]}}
+					]},
+					"hints": [
+						"Los escaneos son largos; para comparar solo interesan las líneas 'report' y 'open'.",
+						"grep -E 'report|open' filtra ambas; > guarda la salida en un archivo.",
+						"`nmap 10.0.11.0/24 | grep -E 'report|open' > actual.txt`"
+					]
+				},
+				{
+					"id": "v4_leer_esperado",
+					"text": "Lee el inventario esperado (esperado.txt) para saber qué DEBERÍA ofrecer la red",
+					"short": "Lee el inventario esperado",
+					"concept": "inventario",
+					"requires": ["v3_guardar"],
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/esperado.txt"}},
+					"hints": [
+						"El inventario esperado es el punto de comparación.",
+						"Está en tu directorio personal, junto a la nota.",
+						"`cat esperado.txt`: tiene el mismo formato que lo que guardaste."
+					]
+				}
+			]
+		},
+		{
+			"id": "v2_comparar",
+			"title": "Comparar con lo esperado",
+			"briefing": "Ahora comparas lo que hay con lo que debería haber. Todo lo que sobra es un servicio no inventariado: puede ser legítimo y haberse olvidado, o un descuido. Antes de decidir qué es, compruébalo.",
+			"objectives": [
+				{
+					"id": "v5_diff",
+					"text": "Compara el inventario esperado con el estado actual (diff esperado.txt actual.txt)",
+					"short": "Compara con diff",
+					"concept": "exposicion",
+					"requires": ["v4_leer_esperado"],
+					"check": {"event": "files_compared", "where": {"a": "/home/ronin/esperado.txt", "b": "/home/ronin/actual.txt", "same": [false]}},
+					"evidence": {"id": "evv_diff", "title": "Servicios no esperados", "detail": "diff: 21/tcp (ftp) en ficheros y 8080/tcp en base no están en el inventario"},
+					"hints": [
+						"diff muestra qué líneas hay de más o de menos entre dos archivos.",
+						"Pon primero el esperado y después el actual: las líneas con > son las que aparecieron.",
+						"`diff esperado.txt actual.txt`: verás dos líneas nuevas con >."
+					]
+				},
+				{
+					"id": "v6_hecho",
+					"text": "Anota con la clasificación correcta lo que está comprobado sobre el puerto 21 (ftp) de ficheros (`hallazgo`)",
+					"short": "Anota el hecho del puerto 21",
+					"concept": "analisis_hallazgos",
+					"requires": ["v5_diff"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["21"]}},
+					"classify": {
+						"keywords": ["21", "ftp"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: el escaneo muestra el puerto abierto y el diff muestra que no está en el inventario. Que no sea esperado es un hecho; si es un riesgo, ya es otra cuestión.",
+						"feedback": {
+							"indicio": "Aquí no hay nada indirecto: el escaneo y el diff lo muestran directamente.",
+							"hipotesis": "No hay que suponer nada: el puerto está abierto y no figura en el inventario.",
+							"falso-positivo": "No lo es: el escaneo lo ve y el inventario no lo incluye."
+						}
+					},
+					"hints": [
+						"Lo comprobado es lo que muestran tus propias salidas.",
+						"Menciona el equipo, el puerto y que no está en el inventario esperado.",
+						"`hallazgo confirmado \"ficheros ofrece 21/tcp (ftp), que no figura en el inventario esperado\"`"
+					]
+				},
+				{
+					"id": "v7_curl",
+					"text": "El puerto 8080 de base también sobra: mira qué es pidiéndolo con curl antes de opinar",
+					"short": "Mira qué es el puerto 8080",
+					"concept": "http",
+					"requires": ["v5_diff"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.11.12", "port": 8080}},
+					"hints": [
+						"Un puerto abierto que habla web se puede mirar con curl, igual que cualquier otra página.",
+						"Equipo base (10.0.11.12), puerto 8080.",
+						"`curl 10.0.11.12:8080`: muestra una página de pruebas del equipo de desarrollo."
+					]
+				},
+				{
+					"id": "v8_causa",
+					"text": "Anota con la clasificación correcta una posible razón por la que el panel de pruebas sigue activo, sin haberla comprobado (`hallazgo`)",
+					"short": "Anota la causa como suposición",
+					"concept": "analisis_hallazgos",
+					"requires": ["v7_curl"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["hipotesis", "indicio"]}, "contains": {"text": ["olvid"]}},
+					"classify": {
+						"keywords": ["olvid", "desarrollo", "prueba"],
+						"accepted": ["hipotesis", "indicio"],
+						"ok": "Bien: lo que se ve es el panel; por qué sigue activo es una suposición que habría que confirmar con el equipo de desarrollo.",
+						"feedback": {
+							"confirmado": "Todavía no: el panel está activo, pero el motivo no lo muestra ninguna salida. Habría que preguntarlo.",
+							"falso-positivo": "No hay base para descartarlo: el servicio existe y no está en el inventario."
+						}
+					},
+					"hints": [
+						"Piensa en el porqué, que no sale en ninguna salida.",
+						"Si no puedes demostrarlo con una salida, no es un hecho.",
+						"`hallazgo hipotesis \"el panel de pruebas pudo quedarse activo por olvido tras una prueba de desarrollo\"`"
+					]
+				}
+			]
+		},
+		{
+			"id": "v3_cerrar",
+			"title": "Cerrar y verificar",
+			"briefing": "Lo que sobra se cierra, pero siempre sobre una copia de la configuración y sin tocar producción. Después verificas y dejas un informe que separe lo que sabes de lo que supones.",
+			"objectives": [
+				{
+					"id": "v9_cerrar",
+					"text": "Desactiva el servicio FTP en la copia de la configuración de ficheros (config/ficheros_servicios.conf.copia): ftp=off",
+					"short": "Desactiva ftp en la copia",
+					"concept": "configuracion_segura",
+					"requires": ["v6_hecho"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/config/ficheros_servicios.conf.copia"}, "contains": {"text": ["ftp=off", "ssh=on"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/config/ficheros_servicios.conf.copia"}, "contains": {"text": ["ftp=off", "ssh=on"]}}
+					]},
+					"hints": [
+						"Quita solo lo que sobra: el acceso por SSH hace falta y debe seguir activo.",
+						"`nano config/ficheros_servicios.conf.copia` y cambia on por off solo en la línea de ftp.",
+						"Debe quedar `ssh=on` y `ftp=off`. Guarda con Ctrl+S."
+					]
+				},
+				{
+					"id": "v10_verificar",
+					"text": "Comprueba con un `if` y grep que la copia ya tiene ftp apagado y ssh encendido",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["v9_cerrar"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"Un if ejecuta una rama u otra según el código de salida de grep.",
+						"if grep 'ftp=off' archivo; then echo ok; else echo revisar; fi",
+						"`if grep 'ftp=off' config/ficheros_servicios.conf.copia; then echo cerrado; else echo revisar; fi`"
+					]
+				},
+				{
+					"id": "v11_informe",
+					"text": "Redacta en informe/borrador.md qué sobra, dónde, la evidencia, el riesgo, lo que NO está confirmado y las medidas, y supera la revisión (`revisar`)",
+					"short": "Informe de exposición",
+					"concept": "informe",
+					"requires": ["v8_causa", "v10_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 160,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué: servicios que sobran respecto al inventario", "any": ["ftp", "8080", "panel de pruebas", "no esperado", "no figura"]},
+							{"id": "donde", "label": "Dónde: equipos afectados", "any": ["ficheros", "10.0.11.11", "10.0.11.12", "base"]},
+							{"id": "evidencia", "label": "Evidencia: lo que mostraron el escaneo y el diff", "any": ["diff", "nmap", "21/tcp", "8080/tcp", "escaneo"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "sin cifrar", "superficie", "acceso no autorizado", "expuesto"]},
+							{"id": "limites", "label": "Límites: lo que no está confirmado", "any": ["no se puede confirmar", "no está confirmado", "hipótesis", "podría", "posible", "no sabemos", "habría que preguntar"]},
+							{"id": "medidas", "label": "Medidas: qué hacer", "any": ["desactivar", "cerrar", "apagar", "retirar", "restringir", "firewall", "actualizar el inventario"]}
+						]
+					},
+					"evidence": {"id": "evv_informe", "title": "Informe de exposición", "detail": "borrador.md separa hechos, límites y medidas"},
+					"hints": [
+						"Un buen informe: qué sobra, dónde, evidencia, riesgo, qué no se sabe y qué medidas. Sin afirmar lo que no probaste.",
+						"Escríbelo con `nano informe/borrador.md` y comprueba con `revisar` qué falta.",
+						"Ejemplo: \"El diff entre el inventario esperado y el escaneo de nmap muestra 21/tcp (ftp) en ficheros (10.0.11.11) y 8080/tcp en base (10.0.11.12), que no figuran. Riesgo: ftp sin cifrar y mayor superficie expuesta. No se puede confirmar por qué el panel de pruebas sigue activo (hipótesis). Medidas: desactivar ftp, retirar o restringir el panel con firewall y actualizar el inventario.\""
+					]
+				}
+			]
+		}
+	]
+}

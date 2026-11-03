@@ -704,6 +704,106 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_inventario",
+			"concept": "inventario",
+			"lab": "repaso_inventario",
+			"title": "Repaso: inventariar",
+			"briefing": "Otra red propia: 10.0.13.0/24. Escanéala y guarda en actual.txt solo las líneas de equipos y de puertos abiertos, para poder compararlas.",
+			"objectives": [
+				{
+					"id": "r_inv_guardar",
+					"text": "Escanea la red 10.0.13.0/24 y guarda en actual.txt solo las líneas 'report' y 'open'",
+					"short": "Escanea y guarda el estado actual",
+					"concept": "inventario",
+					"check": {"all": [
+						{"event": "host_discovered", "distinct": "ip", "min": 1},
+						{"event": "file_written", "where": {"path": "/home/ronin/actual.txt"}, "contains": {"text": ["open", "report"]}},
+						{"event": "pipeline", "contains": {"cmds": ["nmap", "grep"]}}
+					]},
+					"hints": [
+						"nmap lista equipos y puertos; grep -E 'report|open' se queda con lo que importa; > guarda.",
+						"Todo en una tubería: nmap ... | grep -E ... > archivo.",
+						"`nmap 10.0.13.0/24 | grep -E 'report|open' > actual.txt`"
+					]
+				}
+			]
+		},
+		{
+			"id": "r_exposicion",
+			"concept": "exposicion",
+			"lab": "repaso_inventario",
+			"title": "Repaso: lo que sobra",
+			"briefing": "Hay un inventario esperado en esperado.txt. Guarda el estado actual y compáralos: lo que aparezca de más es lo que sobra.",
+			"objectives": [
+				{
+					"id": "r_exp_diff",
+					"text": "Guarda el estado actual de la red en actual.txt y compáralo con esperado.txt usando diff",
+					"short": "Guarda y compara con diff",
+					"concept": "exposicion",
+					"check": {"all": [
+						{"event": "file_written", "where": {"path": "/home/ronin/actual.txt"}, "contains": {"text": ["open"]}},
+						{"event": "files_compared", "where": {"a": "/home/ronin/esperado.txt", "b": "/home/ronin/actual.txt", "same": [false]}}
+					]},
+					"hints": [
+						"Primero el estado actual, después la comparación.",
+						"diff esperado.txt actual.txt: las líneas con > son las que aparecieron de más.",
+						"`nmap 10.0.13.0/24 | grep -E 'report|open' > actual.txt` y `diff esperado.txt actual.txt` (sobra el puerto 3306)."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_cuentas",
+			"concept": "higiene_cuentas",
+			"lab": "repaso_cuentas",
+			"title": "Repaso: cuentas inactivas",
+			"briefing": "La política manda bloquear las cuentas sin acceso en más de 90 días (hoy es 2026-11-03). En accesos.txt están las fechas y en estado.conf.copia el estado de cada cuenta.",
+			"objectives": [
+				{
+					"id": "r_cue_bloquear",
+					"text": "Mira accesos.txt y, en estado.conf.copia, bloquea solo la cuenta inactiva (cuenta=bloqueada) dejando activas las demás",
+					"short": "Bloquea solo la inactiva",
+					"concept": "higiene_cuentas",
+					"check": {"all": [
+						{"event": "file_read", "where": {"path": "/home/ronin/accesos.txt"}},
+						{"any": [
+							{"event": "file_edited", "where": {"path": "/home/ronin/estado.conf.copia"}, "contains": {"text": ["temporal=bloqueada", "ana=activa", "luis=activa"]}},
+							{"event": "file_written", "where": {"path": "/home/ronin/estado.conf.copia"}, "contains": {"text": ["temporal=bloqueada", "ana=activa", "luis=activa"]}}
+						]}
+					]},
+					"hints": [
+						"Busca en accesos.txt la fecha que supere los 90 días.",
+						"Solo una cuenta cumple: edita su línea en estado.conf.copia y deja las demás.",
+						"`temporal=bloqueada`, con `ana=activa` y `luis=activa` intactas."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_politica",
+			"concept": "politicas_acceso",
+			"lab": "repaso_cuentas",
+			"title": "Repaso: política de contraseñas",
+			"briefing": "La política exige contraseñas de al menos 12 caracteres que caduquen a los 90 días. Ajusta la copia pass.conf.copia.",
+			"objectives": [
+				{
+					"id": "r_pol_ajustar",
+					"text": "En pass.conf.copia, deja PASS_MIN_LEN en 12 y PASS_MAX_DAYS en 90",
+					"short": "Ajusta la política de contraseñas",
+					"concept": "politicas_acceso",
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/pass.conf.copia"}, "contains": {"text": ["pass_min_len 12", "pass_max_days 90"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/pass.conf.copia"}, "contains": {"text": ["pass_min_len 12", "pass_max_days 90"]}}
+					]},
+					"hints": [
+						"Cambia los valores de las dos líneas; no añadas otras.",
+						"`nano pass.conf.copia` y guarda con Ctrl+S.",
+						"Deben quedar `PASS_MIN_LEN 12` y `PASS_MAX_DAYS 90`."
+					]
+				}
+			]
 		}
 	]
 }

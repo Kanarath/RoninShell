@@ -1,0 +1,64 @@
+{
+	"id": "cuentas",
+	"title": "Higiene de cuentas",
+	"cidr": "10.0.12.0/24",
+	"player_host": "10.0.12.2",
+	"hosts": [
+		{
+			"ip": "10.0.12.2",
+			"hostname": "cuentas09",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "HIGIENE DE CUENTAS (defensivo)\nServidor propio: cuentas09. Revisión periódica de cuentas de usuario según la política de la empresa.\nSe trabaja SOLO sobre las copias de /home/ronin/revision/ (estado.conf.copia y login.defs.copia). Nada en producción.\nAntes de bloquear una cuenta hay que confirmar con su responsable: la revisión propone, no ejecuta a ciegas.\n"
+				},
+				"/home/ronin/revision": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/revision/politica.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "POLÍTICA DE CUENTAS (revisión del 2026-11-03)\n1) Las cuentas sin acceso en más de 90 días se bloquean.\n2) No se usan cuentas compartidas: cada persona, la suya.\n3) Contraseñas de al menos 12 caracteres que caducan a los 90 días.\n"
+				},
+				"/home/ronin/revision/ultimo_acceso.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "ana;2026-11-02\nluis;2026-10-30\nmarta;2026-11-01\nsvc-backup;2026-11-03\npruebas;2025-11-12\nex-becario;2026-02-01\ncontratista;2026-05-30\nsoporte-compartida;2026-10-15\n"
+				},
+				"/home/ronin/revision/estado.conf.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "ana=activa\nluis=activa\nmarta=activa\nsvc-backup=activa\npruebas=activa\nex-becario=activa\ncontratista=activa\nsoporte-compartida=activa\n"
+				},
+				"/home/ronin/revision/login.defs.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Copia de la política de contraseñas\nPASS_MIN_LEN 6\nPASS_MAX_DAYS 99999\nPASS_WARN_AGE 7\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de cuentas\n\nPendiente de completar.\n"
+				}
+			}
+		}
+	]
+}

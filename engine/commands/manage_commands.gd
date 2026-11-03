@@ -3,12 +3,14 @@ extends RefCounted
 ## Todo ocurre sobre el sistema de archivos virtual del host (nada toca el disco real) y respeta
 ## los permisos Unix del usuario: para crear, copiar, mover o borrar hace falta poder escribir en el directorio.
 ##
-## Límites conocidos (a propósito): sin -i/-v/-p de cp ni -u de diff; diff compara línea a línea por posición
-## (no calcula el mínimo de cambios); sha256sum calcula el hash real del texto del archivo.
+## Límites conocidos (a propósito): sin -i/-v/-p de cp ni -u de diff; diff usa formato normal (sin -u);
+## sha256sum calcula el hash real del texto del archivo.
 
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
 const ArgParser := preload("res://engine/commands/arg_parser.gd")
+
+const MAX_DIFF_LINES := 300   # tope de seguridad: el cálculo crece con el producto de las dos longitudes
 
 
 func register_all(registry: RefCounted) -> void:
@@ -288,17 +290,9 @@ func _diff(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		session.record("file_read", {"path": path})
 	var first_lines := _split_lines(texts[0])
 	var second_lines := _split_lines(texts[1])
-	var out := ""
-	for i in maxi(first_lines.size(), second_lines.size()):
-		var a: String = first_lines[i] if i < first_lines.size() else ""
-		var b: String = second_lines[i] if i < second_lines.size() else ""
-		if i < first_lines.size() and i < second_lines.size():
-			if a != b:
-				out += "%dc%d\n< %s\n---\n> %s\n" % [i + 1, i + 1, a, b]
-		elif i < first_lines.size():
-			out += "%dd%d\n< %s\n" % [i + 1, i, a]
-		else:
-			out += "%da%d\n> %s\n" % [i, i + 1, b]
+	if first_lines.size() > MAX_DIFF_LINES or second_lines.size() > MAX_DIFF_LINES:
+		return CommandResult.error("diff: archivos demasiado grandes para este laboratorio (máximo %d líneas)" % MAX_DIFF_LINES, 2)
+	var out := _normal_diff(first_lines, second_lines)
 	var same := out == ""
 	session.record("files_compared", {"a": _abs(session, parsed["rest"][0]), "b": _abs(session, parsed["rest"][1]), "same": same})
 	var result := CommandResult.new()
@@ -307,6 +301,57 @@ func _diff(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	result.exit_code = 1
 	result.stdout = ("Files %s and %s differ\n" % [parsed["rest"][0], parsed["rest"][1]]) if parsed["flags"].has("q") else out
 	return result
+
+
+## Diff en formato normal (como `diff a b`): calcula las líneas en común (LCS) y agrupa los cambios en bloques.
+func _normal_diff(a: Array, b: Array) -> String:
+	var n := a.size()
+	var m := b.size()
+	# lcs[i][j] = longitud de la subsecuencia común de a[i..] y b[j..]
+	var lcs: Array = []
+	for i in n + 1:
+		var row: Array = []
+		row.resize(m + 1)
+		row.fill(0)
+		lcs.append(row)
+	for i in range(n - 1, -1, -1):
+		for j in range(m - 1, -1, -1):
+			lcs[i][j] = lcs[i + 1][j + 1] + 1 if a[i] == b[j] else maxi(lcs[i + 1][j], lcs[i][j + 1])
+	var out := ""
+	var i := 0
+	var j := 0
+	while i < n or j < m:
+		if i < n and j < m and a[i] == b[j]:
+			i += 1
+			j += 1
+			continue
+		# bloque de cambios: líneas que solo están en a (borradas) y/o solo en b (añadidas)
+		var start_a := i
+		var start_b := j
+		while (i < n or j < m) and not (i < n and j < m and a[i] == b[j]):
+			if j >= m or (i < n and lcs[i + 1][j] >= lcs[i][j + 1]):
+				i += 1
+			else:
+				j += 1
+		var removed := a.slice(start_a, i)
+		var added := b.slice(start_b, j)
+		if removed.is_empty():
+			out += "%da%s\n" % [start_a, _range(start_b + 1, j)]
+		elif added.is_empty():
+			out += "%sd%d\n" % [_range(start_a + 1, i), start_b]
+		else:
+			out += "%sc%s\n" % [_range(start_a + 1, i), _range(start_b + 1, j)]
+		for line in removed:
+			out += "< %s\n" % line
+		if not removed.is_empty() and not added.is_empty():
+			out += "---\n"
+		for line in added:
+			out += "> %s\n" % line
+	return out
+
+
+func _range(first: int, last: int) -> String:
+	return str(first) if first == last else "%d,%d" % [first, last]
 
 
 func _split_lines(text: String) -> Array:

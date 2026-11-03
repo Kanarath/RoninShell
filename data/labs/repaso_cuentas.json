@@ -1,0 +1,44 @@
+{
+	"id": "repaso_cuentas",
+	"title": "Repaso: servidor de personal",
+	"cidr": "10.0.14.0/24",
+	"player_host": "10.0.14.2",
+	"hosts": [
+		{
+			"ip": "10.0.14.2",
+			"hostname": "personal11",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/accesos.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "ana;2026-11-01\nluis;2026-10-28\ntemporal;2025-12-20\n"
+				},
+				"/home/ronin/estado.conf.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "ana=activa\nluis=activa\ntemporal=activa\n"
+				},
+				"/home/ronin/pass.conf.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "PASS_MIN_LEN 8\nPASS_MAX_DAYS 180\n"
+				}
+			}
+		}
+	]
+}

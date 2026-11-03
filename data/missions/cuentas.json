@@ -1,0 +1,201 @@
+{
+	"id": "cuentas",
+	"title": "Higiene de cuentas",
+	"lab": "cuentas",
+	"missions": [
+		{
+			"id": "a1_revisar",
+			"title": "Revisar las cuentas",
+			"briefing": "Las cuentas olvidadas son puertas que nadie vigila. Revisas, con la política delante, qué cuentas de un servidor propio llevan demasiado tiempo sin usarse. Todo sobre copias y datos de ejemplo: aquí propones, no ejecutas a ciegas.",
+			"objectives": [
+				{
+					"id": "a1_alcance",
+					"text": "Lee la nota del cliente: qué se revisa y con qué cautelas",
+					"short": "Lee el alcance",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de revisar, confirma qué se te permite y qué no.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: se trabaja sobre copias y antes de bloquear se confirma con el responsable."
+					]
+				},
+				{
+					"id": "a2_politica",
+					"text": "Lee la política de cuentas (revision/politica.txt): es el criterio con el que se juzga",
+					"short": "Lee la política",
+					"concept": "politicas_acceso",
+					"requires": ["a1_alcance"],
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/revision/politica.txt"}},
+					"hints": [
+						"Una revisión se hace contra un criterio escrito, no a ojo.",
+						"La política está dentro de la carpeta revision.",
+						"`cat revision/politica.txt`: bloquear a los 90 días sin acceso, sin cuentas compartidas, contraseñas de 12."
+					]
+				},
+				{
+					"id": "a3_contar",
+					"text": "Cuenta con una tubería (grep ... | wc -l) cuántas cuentas de ultimo_acceso.txt llevan más de 90 días sin acceso (fechas de 2025 o de enero a julio de 2026)",
+					"short": "Cuenta las cuentas inactivas",
+					"concept": "tuberias",
+					"requires": ["a2_politica"],
+					"check": {"event": "pipeline", "contains": {"cmds": ["grep", "wc"]}},
+					"evidence": {"id": "eva_inactivas", "title": "Cuentas inactivas", "detail": "3 cuentas sin acceso desde hace más de 90 días: pruebas, ex-becario y contratista"},
+					"hints": [
+						"Hoy es 2026-11-03: más de 90 días atrás es antes del 2026-08-05.",
+						"grep -E acepta alternativas con |: '2025|2026-0[1-7]'. Cuenta con wc -l.",
+						"`grep -E '2025|2026-0[1-7]' revision/ultimo_acceso.txt | wc -l` devuelve 3 (sin el wc verás cuáles son)."
+					]
+				},
+				{
+					"id": "a4_hecho",
+					"text": "Anota con la clasificación correcta lo que SÍ está comprobado sobre las cuentas inactivas (`hallazgo`)",
+					"short": "Anota el hecho comprobado",
+					"concept": "analisis_hallazgos",
+					"requires": ["a3_contar"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["pruebas"]}},
+					"classify": {
+						"keywords": ["pruebas", "ex-becario", "contratista"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: las fechas están en el archivo y cualquiera puede contarlas contra la política. Eso es un hecho.",
+						"feedback": {
+							"indicio": "No es indirecto: las fechas del archivo lo muestran tal cual.",
+							"hipotesis": "No hay que suponer: la fecha del último acceso está escrita y la política dice 90 días.",
+							"falso-positivo": "No lo es: según el archivo, esas cuentas llevan más de 90 días sin acceso."
+						}
+					},
+					"hints": [
+						"Lo comprobado es lo que muestran los datos: qué cuentas y desde cuándo.",
+						"Nombra las cuentas y di que superan los 90 días de la política.",
+						"`hallazgo confirmado \"pruebas, ex-becario y contratista llevan más de 90 días sin acceso\"`"
+					]
+				},
+				{
+					"id": "a5_causa",
+					"text": "Anota con la clasificación correcta una posible explicación de por qué siguen abiertas, sin haberla comprobado (`hallazgo`)",
+					"short": "Anota la explicación como suposición",
+					"concept": "analisis_hallazgos",
+					"requires": ["a4_hecho"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["hipotesis", "indicio"]}, "contains": {"text": ["ya no"]}},
+					"classify": {
+						"keywords": ["ya no", "baja", "olvid", "trabaj"],
+						"accepted": ["hipotesis", "indicio"],
+						"ok": "Bien: los datos no dicen por qué siguen abiertas; que sus dueños ya no trabajen aquí es una suposición que hay que confirmar con ellos o con RR. HH.",
+						"feedback": {
+							"confirmado": "Todavía no: nada en los datos dice si esas personas siguen en la empresa. Habría que preguntar.",
+							"falso-positivo": "No hay base para descartarlas: llevan más de 90 días sin acceso."
+						}
+					},
+					"hints": [
+						"Piensa en el porqué: quién es el dueño y si sigue en la empresa. Eso no sale en ningún archivo.",
+						"Si no puedes demostrarlo con los datos, no es un hecho.",
+						"`hallazgo hipotesis \"el ex-becario y el contratista ya no trabajan aquí y nadie cerró sus cuentas\"`"
+					]
+				}
+			]
+		},
+		{
+			"id": "a2_aplicar",
+			"title": "Aplicar la política en las copias",
+			"briefing": "Con los hechos claros, preparas los cambios sobre las copias: bloquear lo que la política manda, endurecer la política de contraseñas y marcar para revisión lo que no se debe tocar a ciegas. Cada cambio toca solo lo necesario.",
+			"objectives": [
+				{
+					"id": "a6_bloquear",
+					"text": "En revision/estado.conf.copia, bloquea solo las tres cuentas inactivas (cuenta=bloqueada) y deja activas las demás",
+					"short": "Bloquea las tres inactivas",
+					"concept": "higiene_cuentas",
+					"requires": ["a4_hecho"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/estado.conf.copia"}, "contains": {"text": ["pruebas=bloqueada", "ex-becario=bloqueada", "contratista=bloqueada", "ana=activa", "luis=activa", "svc-backup=activa"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/estado.conf.copia"}, "contains": {"text": ["pruebas=bloqueada", "ex-becario=bloqueada", "contratista=bloqueada", "ana=activa", "luis=activa", "svc-backup=activa"]}}
+					]},
+					"hints": [
+						"Bloquear de más también es un error: las cuentas en uso deben seguir activas.",
+						"`nano revision/estado.conf.copia` y cambia activa por bloqueada solo en esas tres líneas.",
+						"Quedan pruebas, ex-becario y contratista en bloqueada; ana, luis, marta y svc-backup siguen en activa."
+					]
+				},
+				{
+					"id": "a7_contrasenas",
+					"text": "En revision/login.defs.copia, sube la longitud mínima a 12 y la caducidad a 90 días (PASS_MIN_LEN y PASS_MAX_DAYS)",
+					"short": "Endurece la política de contraseñas",
+					"concept": "politicas_acceso",
+					"requires": ["a2_politica"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/login.defs.copia"}, "contains": {"text": ["pass_min_len 12", "pass_max_days 90"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/login.defs.copia"}, "contains": {"text": ["pass_min_len 12", "pass_max_days 90"]}}
+					]},
+					"hints": [
+						"La política dice 12 caracteres y 90 días; la copia tiene valores mucho más flojos.",
+						"Edita con nano las líneas PASS_MIN_LEN y PASS_MAX_DAYS.",
+						"Deben quedar `PASS_MIN_LEN 12` y `PASS_MAX_DAYS 90`."
+					]
+				},
+				{
+					"id": "a8_transfer",
+					"text": "Transferencia: la política prohíbe cuentas compartidas, pero soporte-compartida se usó hace poco: márcala como revision (soporte-compartida=revision) en lugar de bloquearla a ciegas",
+					"short": "Transferencia: marca la cuenta compartida para revisión",
+					"concept": "higiene_cuentas",
+					"transfer": true,
+					"requires": ["a6_bloquear"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/revision/estado.conf.copia"}, "contains": {"text": ["soporte-compartida=revision", "svc-backup=activa", "pruebas=bloqueada"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/revision/estado.conf.copia"}, "contains": {"text": ["soporte-compartida=revision", "svc-backup=activa", "pruebas=bloqueada"]}}
+					]},
+					"hints": [
+						"Esta cuenta se usó hace menos de 90 días: bloquearla puede romper un trabajo en curso. Primero hay que hablar con quien la usa.",
+						"En la misma copia, cambia solo la línea de soporte-compartida por revision.",
+						"Debe quedar `soporte-compartida=revision` y las otras líneas como estaban."
+					]
+				}
+			]
+		},
+		{
+			"id": "a3_cierre",
+			"title": "Verificar y documentar",
+			"briefing": "Para cerrar, compruebas con un if que el cambio quedó escrito y entregas un informe breve que separe lo comprobado de lo supuesto, con medidas que mantengan la higiene a futuro.",
+			"objectives": [
+				{
+					"id": "a9_verificar",
+					"text": "Comprueba con un `if` y grep que la copia ya tiene cuentas bloqueadas y que el comando responde según el caso",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["a6_bloquear"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"Un if ejecuta una rama u otra según el código de salida de grep.",
+						"if grep 'bloqueada' archivo; then echo ok; else echo revisar; fi",
+						"`if grep 'bloqueada' revision/estado.conf.copia; then echo hecho; else echo revisar; fi`"
+					]
+				},
+				{
+					"id": "a10_informe",
+					"text": "Redacta en informe/borrador.md qué cuentas incumplen, dónde, la evidencia, el riesgo, lo que NO está confirmado y las medidas, y supera la revisión (`revisar`)",
+					"short": "Informe de cuentas",
+					"concept": "informe",
+					"requires": ["a5_causa", "a7_contrasenas", "a9_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 160,
+						"forbidden": ["hackead", "comprometid"],
+						"elements": [
+							{"id": "que", "label": "Qué: cuentas que incumplen la política", "any": ["pruebas", "ex-becario", "contratista", "inactivas", "compartida"]},
+							{"id": "donde", "label": "Dónde: servidor y archivos", "any": ["cuentas09", "ultimo_acceso", "estado.conf", "revision/"]},
+							{"id": "evidencia", "label": "Evidencia: datos que lo muestran", "any": ["90 días", "2025-11-12", "2026-02-01", "2026-05-30", "ultimo_acceso", "grep"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "olvidada", "acceso no autorizado", "puerta", "sin vigilar"]},
+							{"id": "limites", "label": "Límites: lo que no está confirmado", "any": ["no se puede confirmar", "no está confirmado", "hipótesis", "podría", "posible", "no sabemos", "confirmar con"]},
+							{"id": "medidas", "label": "Medidas: qué hacer", "any": ["bloquear", "revisión periódica", "revisar periódicamente", "cuentas individuales", "doble factor", "mfa", "caducidad", "12 caracteres"]}
+						]
+					},
+					"evidence": {"id": "eva_informe", "title": "Informe de cuentas", "detail": "borrador.md separa hechos, límites y medidas"},
+					"hints": [
+						"Un buen informe: qué incumple, dónde, evidencia, riesgo, qué no se sabe y qué medidas. Sin dar por hecho lo que no probaste.",
+						"Escríbelo con `nano informe/borrador.md` y comprueba con `revisar` qué falta.",
+						"Ejemplo: \"En cuentas09, ultimo_acceso.txt muestra que pruebas, ex-becario y contratista llevan más de 90 días sin acceso. Riesgo: cuentas olvidadas sin vigilar y posible acceso no autorizado. No se puede confirmar que sus dueños ya no trabajen aquí: hay que confirmar con RR. HH. Medidas: bloquear las tres tras confirmarlo, endurecer la política a 12 caracteres y 90 días, y hacer una revisión periódica.\""
+					]
+				}
+			]
+		}
+	]
+}

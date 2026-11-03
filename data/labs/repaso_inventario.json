@@ -1,0 +1,50 @@
+{
+	"id": "repaso_inventario",
+	"title": "Repaso: red de almacén",
+	"cidr": "10.0.13.0/24",
+	"player_host": "10.0.13.2",
+	"hosts": [
+		{
+			"ip": "10.0.13.2",
+			"hostname": "revisor10",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/esperado.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "Nmap scan report for revisor10 (10.0.13.2)\nNmap scan report for almacen (10.0.13.20)\n22/tcp   open  ssh\n80/tcp   open  http\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.13.20",
+			"hostname": "almacen",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "9.2p1", "banner": "SSH-2.0-OpenSSH_9.2p1 Debian-2"},
+				{"port": 80, "state": "open", "name": "http", "product": "nginx", "version": "1.22.1", "banner": "nginx/1.22.1"},
+				{"port": 3306, "state": "open", "name": "mysql", "product": "MariaDB", "version": "10.11.4"}
+			],
+			"sites": {
+				"80": {
+					"server": "nginx/1.22.1",
+					"routes": {
+						"/": {"status": 200, "headers": {"Content-Type": "text/html"}, "body": "<html><body><h1>Almacén</h1></body></html>\n"}
+					}
+				}
+			}
+		}
+	]
+}

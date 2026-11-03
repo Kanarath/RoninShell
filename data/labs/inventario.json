@@ -1,0 +1,96 @@
+{
+	"id": "inventario",
+	"title": "Inventario y exposición",
+	"cidr": "10.0.11.0/24",
+	"player_host": "10.0.11.2",
+	"hosts": [
+		{
+			"ip": "10.0.11.2",
+			"hostname": "auditor08",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "INVENTARIO Y EXPOSICIÓN (defensivo)\nRed propia autorizada: 10.0.11.0/24 (intranet, ficheros y base). No se toca nada fuera de ella.\nObjetivo: comprobar que la red ofrece SOLO lo que el inventario dice que debe ofrecer y corregir lo que sobre.\nEl inventario esperado está en esperado.txt. Las correcciones se hacen sobre copias en config/, nunca en producción.\n"
+				},
+				"/home/ronin/esperado.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "Nmap scan report for auditor08 (10.0.11.2)\nNmap scan report for intranet (10.0.11.10)\n22/tcp open  ssh\n80/tcp open  http\nNmap scan report for ficheros (10.0.11.11)\n22/tcp open  ssh\nNmap scan report for base (10.0.11.12)\n22/tcp   open  ssh\n5432/tcp open  postgresql\n"
+				},
+				"/home/ronin/config": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/config/ficheros_servicios.conf.copia": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Copia de los servicios del servidor ficheros\nssh=on\nftp=on\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de exposición\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.11.10",
+			"hostname": "intranet",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "9.2p1", "banner": "SSH-2.0-OpenSSH_9.2p1 Debian-2"},
+				{"port": 80, "state": "open", "name": "http", "product": "nginx", "version": "1.22.1", "banner": "nginx/1.22.1"}
+			],
+			"sites": {
+				"80": {
+					"server": "nginx/1.22.1",
+					"routes": {
+						"/": {"status": 200, "headers": {"Content-Type": "text/html"}, "body": "<html><body><h1>Intranet de la empresa</h1></body></html>\n"}
+					}
+				}
+			}
+		},
+		{
+			"ip": "10.0.11.11",
+			"hostname": "ficheros",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "9.2p1", "banner": "SSH-2.0-OpenSSH_9.2p1 Debian-2"},
+				{"port": 21, "state": "open", "name": "ftp", "product": "vsftpd", "version": "3.0.5", "banner": "220 (vsFTPd 3.0.5)"}
+			]
+		},
+		{
+			"ip": "10.0.11.12",
+			"hostname": "base",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "9.2p1", "banner": "SSH-2.0-OpenSSH_9.2p1 Debian-2"},
+				{"port": 5432, "state": "open", "name": "postgresql", "product": "PostgreSQL DB", "version": "15.4"},
+				{"port": 8080, "state": "open", "name": "http-proxy", "product": "Servidor de pruebas", "version": "0.9", "banner": "pruebas/0.9"}
+			],
+			"sites": {
+				"8080": {
+					"server": "pruebas/0.9",
+					"routes": {
+						"/": {"status": 200, "headers": {"Content-Type": "text/html"}, "body": "<html><body><h1>Panel de pruebas</h1><p>Solo para el equipo de desarrollo. Estado: activo.</p></body></html>\n"}
+					}
+				}
+			}
+		}
+	]
+}
