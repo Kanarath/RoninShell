@@ -17,6 +17,7 @@ Qué hay hecho:
 - **Tercer laboratorio, "Guardia de logs"** (defensivo): analiza `auth.log` y `access.log` de un servidor propio con tuberías, variables, bucles y `&&`/`||`, y termina con un informe de medidas defensivas.
 - **Cuarto laboratorio, "Endurecimiento"** (defensivo): revisión de la configuración de SSH y permisos de una copia de trabajo de un servidor propio, corrección, verificación con `if` e informe.
 - **Quinto laboratorio, "Triaje de un incidente"** (defensivo): ante un aviso de monitorización, resumes el registro con `sort | uniq -c`, separas hechos de suposiciones, automatizas con funciones y `case`, y entregas un informe con límites y medidas.
+- **Sexto laboratorio, "Copias y recuperación"** (defensivo): crear carpetas, copiar antes de cambiar, verificar con `sha256sum` y `diff`, borrar con cuidado y volver atrás restaurando la copia. Incluye los comandos simulados `mkdir touch cp mv rm sha256sum diff` (solo sobre el sistema de archivos virtual, con permisos y protección de la raíz) y tres repasos nuevos.
 - **Repaso espaciado de automatización**: seis retos nuevos (tuberías, variables, bucles, encadenar, logs y comodines) en un laboratorio distinto.
 - **Editor `nano`**: ventana con Ctrl+S para guardar y Esc para cerrar, con los mismos permisos que el resto del laboratorio.
 - **Ayuda integrada**: `<comando> --help`, `man <comando>` (con límites y "qué NO puedes concluir"), `help`, y `cheatsheet [tema]`.

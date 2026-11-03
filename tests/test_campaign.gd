@@ -35,7 +35,7 @@ func _finish_first_lab(root: Control) -> void:
 
 func test_al_empezar_solo_el_primer_laboratorio_esta_disponible() -> void:
 	var root := _main()
-	assert_eq(root.controller.book_states, {"primer_contacto": "disponible", "tienda_web": "bloqueado", "guardia_logs": "bloqueado", "endurecimiento": "bloqueado", "incidente": "bloqueado"})
+	assert_eq(root.controller.book_states, {"primer_contacto": "disponible", "tienda_web": "bloqueado", "guardia_logs": "bloqueado", "endurecimiento": "bloqueado", "incidente": "bloqueado", "copias": "bloqueado"})
 	_run(root, ["laboratorio"])
 	var out: String = root.terminal.output_text()
 	assert_true("LABORATORIOS" in out and "primer_contacto" in out and "tienda_web" in out)

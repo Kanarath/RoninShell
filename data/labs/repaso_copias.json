@@ -1,0 +1,44 @@
+{
+	"id": "repaso_copias",
+	"title": "Repaso: servidor de agenda",
+	"cidr": "10.0.10.0/24",
+	"player_host": "10.0.10.2",
+	"hosts": [
+		{
+			"ip": "10.0.10.2",
+			"hostname": "agenda07",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/agenda.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "lunes;reunion de equipo\nmartes;revision de accesos\nmiercoles;formacion\n"
+				},
+				"/home/ronin/plan.conf": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Plan semanal\nmodo=normal\navisos=si\n"
+				},
+				"/home/ronin/basura.log": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "lineas de depuracion sin interes\n"
+				}
+			}
+		}
+	]
+}

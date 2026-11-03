@@ -1,0 +1,58 @@
+{
+	"id": "copias",
+	"title": "Copias y recuperación",
+	"cidr": "10.0.9.0/24",
+	"player_host": "10.0.9.2",
+	"hosts": [
+		{
+			"ip": "10.0.9.2",
+			"hostname": "archivo06",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "COPIAS Y RECUPERACIÓN (defensivo)\nServidor propio: archivo06. Se trabaja SOLO en /home/ronin/servicio/ (servicio de notas internas).\nRegla de la casa: antes de cambiar nada, copia lo que vas a tocar y comprueba que la copia es fiel.\nHay que ordenar el directorio, aplicar un cambio de configuración y saber volver atrás.\n"
+				},
+				"/home/ronin/servicio": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/servicio/app.conf": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Configuración del servicio de notas\nmodo=produccion\ndebug=true\nretencion_dias=7\n"
+				},
+				"/home/ronin/servicio/notas.db": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "nota1;revisar presupuesto\nnota2;renovar certificado\nnota3;cambiar claves\n"
+				},
+				"/home/ronin/servicio/temporal.tmp": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "restos de una exportación antigua\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de copias\n\nPendiente de completar.\n"
+				}
+			}
+		}
+	]
+}

@@ -629,6 +629,81 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_archivos",
+			"concept": "gestion_archivos",
+			"lab": "repaso_copias",
+			"title": "Repaso: gestionar archivos",
+			"briefing": "Otro servidor, otros archivos. Ordena: crea una carpeta nueva y mueve dentro el archivo agenda.txt.",
+			"objectives": [
+				{
+					"id": "r_arc_mover",
+					"text": "Crea un directorio y mueve (mv) agenda.txt dentro de él",
+					"short": "Carpeta nueva y mover un archivo",
+					"concept": "gestion_archivos",
+					"check": {"all": [
+						{"event": "dir_created"},
+						{"event": "file_moved", "where": {"src": "/home/ronin/agenda.txt"}}
+					]},
+					"hints": [
+						"mkdir crea carpetas y mv mueve o renombra.",
+						"Primero la carpeta; después mv agenda.txt seguido del nombre de la carpeta.",
+						"`mkdir archivo` y luego `mv agenda.txt archivo/`."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_copias",
+			"concept": "copias_seguridad",
+			"lab": "repaso_copias",
+			"title": "Repaso: copia antes de cambiar",
+			"briefing": "Hay que pasar plan.conf de modo=normal a modo=reforzado. Aplica la regla de la casa: copia antes de tocar.",
+			"objectives": [
+				{
+					"id": "r_cop_cambio",
+					"text": "Haz una copia de plan.conf y después cambia su ajuste a modo=reforzado",
+					"short": "Copia y luego cambia",
+					"concept": "copias_seguridad",
+					"check": {"all": [
+						{"event": "file_copied", "where": {"src": "/home/ronin/plan.conf"}},
+						{"any": [
+							{"event": "file_edited", "where": {"path": "/home/ronin/plan.conf"}, "contains": {"text": ["modo=reforzado"]}},
+							{"event": "file_written", "where": {"path": "/home/ronin/plan.conf"}, "contains": {"text": ["modo=reforzado"]}}
+						]}
+					]},
+					"hints": [
+						"La copia va antes que el cambio: cp la hace y nano o echo cambian el original.",
+						"cp plan.conf plan.conf.bak y luego edita plan.conf.",
+						"`cp plan.conf plan.conf.bak` y `nano plan.conf` (modo=reforzado)."
+					]
+				}
+			]
+		},
+		{
+			"id": "r_integridad",
+			"concept": "integridad",
+			"lab": "repaso_copias",
+			"title": "Repaso: copia fiel",
+			"briefing": "Copia agenda.txt y demuestra, sin mirar el texto a ojo, que la copia es idéntica al original.",
+			"objectives": [
+				{
+					"id": "r_int_huella",
+					"text": "Copia agenda.txt y comprueba con sha256sum que la copia tiene la misma huella que el original",
+					"short": "Copia y compara huellas",
+					"concept": "integridad",
+					"check": {"all": [
+						{"event": "file_copied", "where": {"src": "/home/ronin/agenda.txt"}},
+						{"event": "hash_computed", "distinct": "path", "min": 2}
+					]},
+					"hints": [
+						"Una huella igual significa contenido igual.",
+						"cp primero; luego sha256sum con los dos archivos.",
+						"`cp agenda.txt agenda.bak` y `sha256sum agenda.txt agenda.bak`."
+					]
+				}
+			]
 		}
 	]
 }

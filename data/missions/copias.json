@@ -1,0 +1,194 @@
+{
+	"id": "copias",
+	"title": "Copias y recuperación",
+	"lab": "copias",
+	"missions": [
+		{
+			"id": "c1_copiar",
+			"title": "Copiar antes de tocar",
+			"briefing": "En defensa, la regla de oro es: antes de cambiar algo, ten una copia y comprueba que la copia es fiel. Todo ocurre en un servidor propio, dentro de /home/ronin/servicio. Aquí aprendes a crear carpetas, copiar y verificar con una huella (sha256sum). `cheatsheet archivos` resume los comandos.",
+			"objectives": [
+				{
+					"id": "c1_alcance",
+					"text": "Lee la nota del cliente: qué se toca y qué regla hay que seguir",
+					"short": "Lee el alcance y la regla",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de tocar nada, confirma qué se te permite y bajo qué reglas.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: solo se trabaja en servicio/ y hay que copiar antes de cambiar."
+					]
+				},
+				{
+					"id": "c2_directorio",
+					"text": "Crea un directorio llamado copias en tu carpeta personal (mkdir)",
+					"short": "Crea la carpeta de copias",
+					"concept": "gestion_archivos",
+					"requires": ["c1_alcance"],
+					"check": {"event": "dir_created", "where": {"path": "/home/ronin/copias"}},
+					"hints": [
+						"Un directorio nuevo se crea con un comando de tres letras más 'dir'.",
+						"mkdir NOMBRE crea la carpeta en el directorio actual.",
+						"`mkdir copias` (estando en /home/ronin) y compruébalo con `ls`."
+					]
+				},
+				{
+					"id": "c3_copia",
+					"text": "Copia servicio/app.conf dentro de copias/ (cp): es tu copia de seguridad antes de cambiar nada",
+					"short": "Copia app.conf",
+					"concept": "copias_seguridad",
+					"requires": ["c2_directorio"],
+					"check": {"event": "file_copied", "where": {"src": "/home/ronin/servicio/app.conf"}, "contains": {"dst": ["/home/ronin/copias/"]}},
+					"hints": [
+						"cp ORIGEN DESTINO copia un archivo; si el destino es una carpeta, la copia va dentro.",
+						"Origen: servicio/app.conf. Destino: copias/ (puedes darle otro nombre, como app.conf.bak).",
+						"`cp servicio/app.conf copias/app.conf.bak`"
+					]
+				},
+				{
+					"id": "c4_huella",
+					"text": "Comprueba que la copia es fiel: calcula la huella (sha256sum) del original y de la copia y compáralas",
+					"short": "Verifica la copia con sha256sum",
+					"concept": "integridad",
+					"requires": ["c3_copia"],
+					"check": {"event": "hash_computed", "distinct": "path", "min": 2},
+					"evidence": {"id": "evc_huella", "title": "Copia fiel", "detail": "app.conf y su copia tienen la misma huella SHA-256"},
+					"hints": [
+						"Una huella cambia por completo si cambia un solo carácter: si coinciden, el contenido es idéntico.",
+						"sha256sum acepta varios archivos a la vez.",
+						"`sha256sum servicio/app.conf copias/app.conf.bak`: las dos líneas empiezan igual."
+					]
+				}
+			]
+		},
+		{
+			"id": "c2_cambiar",
+			"title": "Cambiar con red de seguridad",
+			"briefing": "Ya tienes copia verificada, así que puedes tocar con calma. Cambiarás un ajuste, verás exactamente qué cambió con diff y limpiarás un archivo temporal. Borrar no tiene papelera: mira antes de borrar.",
+			"objectives": [
+				{
+					"id": "c5_cambiar",
+					"text": "Cambia en servicio/app.conf el ajuste debug para que quede desactivado (debug=false)",
+					"short": "Desactiva debug",
+					"concept": "configuracion_segura",
+					"requires": ["c4_huella"],
+					"check": {"any": [
+						{"event": "file_edited", "where": {"path": "/home/ronin/servicio/app.conf"}, "contains": {"text": ["debug=false"]}},
+						{"event": "file_written", "where": {"path": "/home/ronin/servicio/app.conf"}, "contains": {"text": ["debug=false"]}}
+					]},
+					"hints": [
+						"Un modo de depuración activo suele dar más información de la necesaria en producción.",
+						"`nano servicio/app.conf` y cambia true por false en la línea de debug; guarda con Ctrl+S.",
+						"La línea debe quedar `debug=false`."
+					]
+				},
+				{
+					"id": "c6_diff",
+					"text": "Compara tu copia con el archivo cambiado (diff) para ver exactamente qué difiere",
+					"short": "Compara con diff",
+					"concept": "integridad",
+					"requires": ["c5_cambiar"],
+					"check": {"event": "files_compared", "where": {"same": [false]}},
+					"hints": [
+						"diff muestra las líneas que cambian entre dos archivos.",
+						"Pásale la copia primero y el archivo actual después.",
+						"`diff copias/app.conf.bak servicio/app.conf`: verás < debug=true y > debug=false."
+					]
+				},
+				{
+					"id": "c7_temporal",
+					"text": "Mira qué hay en servicio/ y borra solo el archivo temporal obsoleto (rm)",
+					"short": "Borra el temporal",
+					"concept": "gestion_archivos",
+					"requires": ["c5_cambiar"],
+					"check": {"event": "file_removed", "where": {"path": "/home/ronin/servicio/temporal.tmp", "directory": [false]}},
+					"hints": [
+						"Antes de borrar, mira qué hay con ls y elige solo lo que sobra.",
+						"El archivo temporal se llama temporal.tmp. rm borra archivos y no hay papelera.",
+						"`rm servicio/temporal.tmp` (no uses -r: no hace falta y es más peligroso)."
+					]
+				},
+				{
+					"id": "c8_transfer",
+					"text": "Transferencia: haz lo mismo con servicio/notas.db: cópialo a copias/ y comprueba también la huella de la copia",
+					"short": "Transferencia: copia y verifica notas.db",
+					"concept": "copias_seguridad",
+					"transfer": true,
+					"requires": ["c6_diff"],
+					"check": {"all": [
+						{"event": "file_copied", "where": {"src": "/home/ronin/servicio/notas.db"}, "contains": {"dst": ["/home/ronin/copias/"]}},
+						{"event": "hash_computed", "distinct": "path", "min": 4}
+					]},
+					"hints": [
+						"Es el mismo procedimiento que con app.conf: copiar y comparar huellas.",
+						"Cuatro archivos distintos deben haber pasado por sha256sum: los dos anteriores y notas.db con su copia.",
+						"`cp servicio/notas.db copias/` y `sha256sum servicio/notas.db copias/notas.db`."
+					]
+				}
+			]
+		},
+		{
+			"id": "c3_recuperar",
+			"title": "Volver atrás y documentar",
+			"briefing": "Un compañero avisa: el cambio de debug no estaba acordado y hay que dejar el servicio como estaba. Gracias a la copia es sencillo. Después verificas con un if que todo volvió a su sitio y dejas un informe breve.",
+			"objectives": [
+				{
+					"id": "c9_restaurar",
+					"text": "Restaura la configuración original: copia tu copia de seguridad encima de servicio/app.conf",
+					"short": "Restaura app.conf",
+					"concept": "copias_seguridad",
+					"requires": ["c6_diff"],
+					"check": {"event": "file_copied", "where": {"dst": "/home/ronin/servicio/app.conf"}, "contains": {"src": ["/home/ronin/copias/"]}},
+					"hints": [
+						"Restaurar es copiar la copia sobre el original: cp la sobrescribe.",
+						"Origen: tu copia en copias/. Destino: servicio/app.conf.",
+						"`cp copias/app.conf.bak servicio/app.conf`"
+					]
+				},
+				{
+					"id": "c10_verificar",
+					"text": "Comprueba con un `if` y diff -q que el archivo restaurado es idéntico a la copia",
+					"short": "Verifica la restauración",
+					"concept": "verificacion",
+					"requires": ["c9_restaurar"],
+					"check": {"all": [
+						{"event": "if_ran"},
+						{"event": "files_compared", "where": {"same": [true]}}
+					]},
+					"hints": [
+						"diff sale con código 0 si los archivos son iguales, y eso es lo que mira un if.",
+						"if diff -q A B; then echo igual; else echo distinto; fi",
+						"`if diff -q copias/app.conf.bak servicio/app.conf; then echo igual; else echo distinto; fi` debe decir igual."
+					]
+				},
+				{
+					"id": "c11_informe",
+					"text": "Redacta en informe/borrador.md qué hiciste, dónde, cómo lo verificaste, el riesgo que evita y tus recomendaciones, y supera la revisión (`revisar`)",
+					"short": "Informe de copias",
+					"concept": "informe",
+					"requires": ["c7_temporal", "c10_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 140,
+						"forbidden": ["hackead"],
+						"elements": [
+							{"id": "que", "label": "Qué: lo que hiciste (copia, cambio, restauración)", "any": ["copia de seguridad", "restaur", "copiamos", "copié", "copie"]},
+							{"id": "donde", "label": "Dónde: servidor y carpetas", "any": ["archivo06", "servicio/", "copias/", "app.conf"]},
+							{"id": "verificacion", "label": "Verificación: cómo sabes que la copia es fiel", "any": ["sha256", "huella", "hash", "diff"]},
+							{"id": "riesgo", "label": "Riesgo: qué evita tener copia", "any": ["riesgo", "pérdida", "perder", "sobrescrib", "sin copia"]},
+							{"id": "recomendacion", "label": "Recomendación: qué mantener a futuro", "any": ["recomend", "antes de cambiar", "probar la restauración", "fuera del servidor", "copias externas", "automatizar"]}
+						]
+					},
+					"evidence": {"id": "evc_informe", "title": "Informe de copias", "detail": "borrador.md describe copia, verificación y restauración"},
+					"hints": [
+						"Un buen informe responde: qué hiciste, dónde, cómo verificaste, qué riesgo evita y qué recomiendas.",
+						"Puedes escribirlo con `nano informe/borrador.md` y comprobar con `revisar` qué falta.",
+						"Ejemplo: \"En archivo06 hice una copia de seguridad de servicio/app.conf en copias/ y verifiqué con sha256sum (misma huella) y diff. Tras el cambio de debug restauré la copia. Riesgo evitado: perder la configuración por sobrescribirla sin copia. Recomendación: copiar y verificar siempre antes de cambiar, guardar copias fuera del servidor y probar la restauración.\""
+					]
+				}
+			]
+		}
+	]
+}
