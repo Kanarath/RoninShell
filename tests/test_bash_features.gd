@@ -202,7 +202,7 @@ func test_bucle_mal_formado_se_explica() -> void:
 	assert_true("syntax error" in s.run("for in a b; do echo; done").stderr)
 	assert_true("syntax error" in s.run("done").stderr)
 	assert_true("syntax error" in s.run("for a in 1; do").stderr)
-	assert_true("todavía no está disponible" in s.run("case x in x) echo hi; esac").stderr)
+	assert_true("todavía no está disponible" in s.run("select x in a b; do echo $x; done").stderr)
 
 
 func test_limite_de_elementos() -> void:

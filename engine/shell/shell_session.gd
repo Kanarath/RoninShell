@@ -18,6 +18,7 @@ const CommandDocs := preload("res://engine/commands/command_docs.gd")
 const HISTORY_LIMIT := 500
 const MAX_LOOP_ITERATIONS := 1000
 const MAX_SUBSTITUTION_DEPTH := 4
+const MAX_CALL_DEPTH := 20             # funciones dentro de funciones (corta la recursión infinita)
 const MAX_COMMANDS_PER_LINE := 5000   # tope de seguridad: ningún bucle puede colgar el juego
 
 var world: RefCounted
@@ -46,6 +47,10 @@ var _budget := 0           # comandos que aún puede ejecutar la línea en curso
 var _aborted := false      # se agotó el presupuesto: se corta todo lo que quede
 var _loop_depth := 0       # bucles anidados en ejecución (break/continue solo valen dentro)
 var _loop_signal := ""     # "break" o "continue" pendiente de que lo recoja el bucle
+var _functions: Dictionary = {}   # funciones definidas por el jugador: nombre -> elementos del cuerpo
+var _positional: Array = []       # argumentos de la función en curso ($1, $2...)
+var _call_depth := 0
+var _return_pending := false      # un return espera a que la función termine
 
 
 ## En modo libre lo que haces se registra marcado como "free": se ve en el mapa, pero no cuenta
@@ -112,6 +117,9 @@ func run(line: String) -> RefCounted:
 	_aborted = false
 	_loop_depth = 0
 	_loop_signal = ""
+	_call_depth = 0
+	_return_pending = false
+	_positional = []
 	_exec_items(built["items"], out)
 	var final := CommandResult.new()
 	final.stdout = out["stdout"]
@@ -130,6 +138,15 @@ func expand_var(name: String) -> String:
 			return str(last_exit_code)
 		"PWD":
 			return cwd
+		"#":
+			return str(_positional.size())
+		"@", "*":
+			return " ".join(_positional)
+		"0":
+			return "bash"
+	if name.is_valid_int():
+		var index := int(name) - 1
+		return str(_positional[index]) if index >= 0 and index < _positional.size() else ""
 	return str(_vars.get(name, ""))
 
 
@@ -223,16 +240,101 @@ func _exec_items(items: Array, out: Dictionary) -> void:
 				_run_while(item, out)
 			"if":
 				_run_if(item, out)
+			"case":
+				_run_case(item, out)
+			"funcdef":
+				_functions[item["name"]] = item["body"]
+				last_exit_code = 0
+				record("function_defined", {"name": item["name"]})
 			_:
-				var word: String = item["text"].strip_edges()
-				if _loop_depth > 0 and (word == "break" or word == "continue"):
-					_loop_signal = word
-					last_exit_code = 0
-					record("loop_control", {"kind": word})
-				else:
-					_run_pipeline(item["text"], out)
-		if _aborted or _loop_signal != "":
+				_run_simple(item["text"], out)
+		if _aborted or _loop_signal != "" or _return_pending:
 			return
+
+
+## Un comando suelto: break/continue/return (solo valen donde toca), una llamada a función o una tubería normal.
+func _run_simple(text: String, out: Dictionary) -> void:
+	var word := text.strip_edges()
+	var name := word.get_slice(" ", 0)
+	if _loop_depth > 0 and (word == "break" or word == "continue"):
+		_loop_signal = word
+		last_exit_code = 0
+		record("loop_control", {"kind": word})
+		return
+	if _call_depth > 0 and name == "return":
+		var code := word.substr(6).strip_edges()
+		last_exit_code = clampi(int(code), 0, 255) if code.is_valid_int() else last_exit_code
+		_return_pending = true
+		return
+	if _functions.has(name):
+		var tokenized := Tokenizer.tokenize(text, self)
+		if tokenized["error"] == "":
+			var args: Array = []
+			var plain := true
+			for token: Dictionary in tokenized["tokens"]:
+				if token["type"] == "word":
+					args.append(token["text"])
+				else:
+					plain = false
+			if plain:
+				_call_function(name, args.slice(1), out)
+				return
+	_run_pipeline(text, out)
+
+
+## Llama a una función del jugador con sus argumentos ($1, $2, $#, $@). Con tope de profundidad y de comandos.
+func _call_function(name: String, args: Array, out: Dictionary) -> void:
+	if _call_depth >= MAX_CALL_DEPTH:
+		_fail_into(out, "%s: demasiadas llamadas anidadas (máximo %d): parece una recursión infinita" % [name, MAX_CALL_DEPTH])
+		return
+	_budget -= 1
+	if _budget < 0:
+		if not _aborted:
+			_fail_into(out, "demasiados comandos en una sola línea: se detiene (límite de seguridad del simulador)")
+		_aborted = true
+		return
+	var saved_args := _positional
+	_positional = args
+	_call_depth += 1
+	last_exit_code = 0
+	_exec_items(_functions[name], out)
+	_call_depth -= 1
+	_return_pending = false
+	_positional = saved_args
+	record("function_called", {"name": name, "args": args.size()})
+
+
+## case PALABRA in patrón) ...;; esac: ejecuta la primera rama cuyo patrón encaje (* y ? como en las rutas).
+func _run_case(item: Dictionary, out: Dictionary) -> void:
+	var word := _expand_word(item["word"], out)
+	var matched := ""
+	var found := false
+	for clause: Dictionary in item["clauses"]:
+		for pattern: String in clause["patterns"]:
+			if Glob.matches(_expand_word(pattern, out), word):
+				matched = pattern
+				found = true
+				break
+		if found:
+			last_exit_code = 0
+			_exec_items(clause["body"], out)
+			break
+	if not found:
+		last_exit_code = 0
+	record("case_ran", {"pattern": matched, "matched": found})
+
+
+## Expande variables y comillas de una palabra suelta (la palabra de case y sus patrones).
+func _expand_word(text: String, out: Dictionary) -> String:
+	var tokenized := Tokenizer.tokenize(text, self)
+	if tokenized["error"] != "":
+		_fail_into(out, tokenized["error"])
+		return ""
+	var parts: Array = []
+	for token: Dictionary in tokenized["tokens"]:
+		if token["type"] == "word":
+			parts.append(token["text"])
+	return " ".join(parts)
 
 
 ## if COND; then A; [else B;] fi: la condición es un comando y cuenta su código de salida.
@@ -267,7 +369,7 @@ func _run_while(item: Dictionary, out: Dictionary) -> void:
 		_exec_items(item["body"], out)
 		var signal_seen := _loop_signal
 		_loop_signal = ""
-		if signal_seen == "break":
+		if signal_seen == "break" or _return_pending:
 			break
 	_loop_depth -= 1
 	record("loop_ran", {"variable": "while", "count": rounds})
@@ -305,7 +407,7 @@ func _run_for(item: Dictionary, out: Dictionary) -> void:
 		_exec_items(item["body"], out)
 		var signal_seen := _loop_signal
 		_loop_signal = ""
-		if signal_seen == "break":
+		if signal_seen == "break" or _return_pending:
 			break
 	_loop_depth -= 1
 	record("loop_ran", {"variable": variable, "count": values.size()})

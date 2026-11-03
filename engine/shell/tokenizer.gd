@@ -174,8 +174,8 @@ static func _expansion(line: String, i: int, env: Object) -> Dictionary:
 		while j < n and (_is_name_start(line[j]) or line[j].is_valid_int()):
 			j += 1
 		return {"consumed": j - i, "value": env.expand_var(line.substr(i + 1, j - i - 1)), "error": ""}
-	if next.is_valid_int():
-		return {"consumed": 2, "value": "", "error": ""}   # $1, $2...: no hay argumentos posicionales
+	if next.is_valid_int() or next == "#" or next == "@" or next == "*":
+		return {"consumed": 2, "value": env.expand_var(next), "error": ""}   # $1 $2 ... $# $@ $*: argumentos de la función
 	return {"consumed": 0, "value": "", "error": ""}
 
 

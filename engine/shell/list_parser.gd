@@ -8,11 +8,16 @@ extends RefCounted
 ##   {"kind": "for", "header", "body": [elementos], "op"}                 for X in a b c; do ...; done
 ##   {"kind": "while", "cond": [...], "body": [...], "negate", "op"}      while/until COND; do ...; done
 ##   {"kind": "if", "cond": [...], "then": [...], "else": [...], "op"}    if COND; then ...; [elif/else ...;] fi
+##   {"kind": "case", "word", "clauses": [{"patterns", "body": [...]}], "op"}  case X in a|b) ...;; *) ...;; esac
+##   {"kind": "funcdef", "name", "body": [...], "op"}                     nombre() { ...; }   /   function nombre { ...; }
 ## `op` es el conector que precede al elemento: "" (el primero), ";", "&&" o "||".
 ##
-## Los errores imitan los de bash. Lo que aún no existe (case, function) se dice claro.
+## Los errores imitan los de bash. Lo que aún no existe (select) se dice claro.
 
 const Tokenizer := preload("res://engine/shell/tokenizer.gd")
+
+## Palabras tras las que puede empezar un comando: ahí `case` es la palabra clave y no un argumento.
+const CASE_PRECEDERS := ["", "then", "do", "else", "elif", "if", "while", "until", "{"]
 
 
 ## Devuelve {"units": [{"text", "op"}], "error": String}.
@@ -25,7 +30,14 @@ static func split(line: String) -> Dictionary:
 	while i < n:
 		var c := line[i]
 		var connector := ""
-		if c == "'":
+		if c == "c" and _command_position(cur) and _word_at(line, i, "case"):
+			var case_end := _case_end(line, i)
+			if case_end == -1:
+				return _fail("unexpected EOF while looking for `esac'")
+			cur += line.substr(i, case_end - i)
+			i = case_end
+			continue
+		elif c == "'":
 			var close := line.find("'", i + 1)
 			if close == -1:
 				return _fail("unexpected EOF while looking for matching `''")
@@ -109,6 +121,8 @@ static func _sequence(state: Dictionary, terminators: Array) -> Dictionary:
 		if word in terminators:
 			return {"items": items, "stop": word, "error": ""}
 		var parsed := {}
+		if word == "function" or not _function_header(unit["text"]).is_empty():
+			word = "function"
 		match word:
 			"for":
 				parsed = _for(state)
@@ -116,10 +130,14 @@ static func _sequence(state: Dictionary, terminators: Array) -> Dictionary:
 				parsed = _while(state)
 			"if":
 				parsed = _if(state, "if")
-			"then", "elif", "else", "fi", "do", "done":
+			"case":
+				parsed = _case(state)
+			"function":
+				parsed = _function(state)
+			"then", "elif", "else", "fi", "do", "done", "esac", "}":
 				return _err("syntax error near unexpected token `%s'" % word)
-			"case", "esac", "function", "select":
-				return _err("`%s' todavía no está disponible en este shell simulado (de momento: ; && || for while until if)" % word)
+			"select":
+				return _err("`select' todavía no está disponible en este shell simulado")
 			_:
 				items.append({"kind": "cmd", "text": unit["text"], "op": unit["op"]})
 				state["pos"] += 1
@@ -237,6 +255,225 @@ static func _if(state: Dictionary, keyword: String) -> Dictionary:
 		if failure != "":
 			return _err(failure)
 	return {"error": "", "item": {"kind": "if", "cond": condition["items"], "then": then_body["items"], "else": else_items, "op": unit["op"] if keyword == "if" else ";"}}
+
+
+## case PALABRA in patrón|patrón) comandos;; ... esac
+static func _case(state: Dictionary) -> Dictionary:
+	var unit: Dictionary = state["units"][state["pos"]]
+	var text: String = unit["text"].substr(4).strip_edges()
+	var word := _read_word(text)
+	var rest: String = text.substr(word.length()).strip_edges()
+	if word == "" or not (rest == "in" or rest.begins_with("in ") or rest.begins_with("in\t")):
+		return _err("syntax error: usa `case PALABRA in patron) comando;; esac`")
+	rest = rest.substr(2).strip_edges()
+	if not rest.ends_with("esac"):
+		return _err("syntax error: unexpected end of file (falta `esac')")
+	var clauses_text: String = rest.substr(0, rest.length() - 4).strip_edges()
+	var clauses: Array = []
+	for raw: String in _split_clauses(clauses_text):
+		var clause := raw.strip_edges()
+		if clause == "":
+			continue
+		var close := _find_unquoted(clause, ")")
+		if close == -1:
+			return _err("syntax error near unexpected token `%s'" % clause)
+		var patterns_text := clause.substr(0, close).strip_edges()
+		if patterns_text.begins_with("("):
+			patterns_text = patterns_text.substr(1).strip_edges()
+		var patterns: Array = []
+		for pattern: String in _split_unquoted(patterns_text, "|"):
+			if pattern.strip_edges() != "":
+				patterns.append(pattern.strip_edges())
+		if patterns.is_empty():
+			return _err("syntax error near unexpected token `)'")
+		var body_text := clause.substr(close + 1).strip_edges()
+		var body_items: Array = []
+		if body_text != "":
+			var parts := split(body_text)
+			if parts["error"] != "":
+				return _err(parts["error"])
+			var built := build(parts["units"])
+			if built["error"] != "":
+				return _err(built["error"])
+			body_items = built["items"]
+		clauses.append({"patterns": patterns, "body": body_items})
+	state["pos"] += 1
+	return {"error": "", "item": {"kind": "case", "word": word, "clauses": clauses, "op": unit["op"]}}
+
+
+## Cabecera de una función: "nombre()", "nombre() {...", "function nombre" o "function nombre()".
+## Devuelve {"name", "rest"} (rest = lo que sigue a la cabecera) o {} si no lo es.
+static func _function_header(text: String) -> Dictionary:
+	var regex := RegEx.new()
+	regex.compile("^(function\\s+)?([A-Za-z_][A-Za-z0-9_]*)(\\s*\\(\\))?\\s*(.*)$")
+	var found := regex.search(text)
+	if found == null:
+		return {}
+	if found.get_string(1) == "" and found.get_string(3) == "":
+		return {}
+	return {"name": found.get_string(2), "rest": found.get_string(4).strip_edges()}
+
+
+static func _function(state: Dictionary) -> Dictionary:
+	var units: Array = state["units"]
+	var unit: Dictionary = units[state["pos"]]
+	var header := _function_header(unit["text"])
+	if header.is_empty():
+		return _err("syntax error: usa `nombre() { comandos; }`")
+	var rest: String = header["rest"]
+	if rest == "" and state["pos"] + 1 < units.size() and units[state["pos"] + 1]["text"].begins_with("{"):
+		state["pos"] += 1
+		rest = units[state["pos"]]["text"]
+	if not rest.begins_with("{"):
+		return _err("syntax error: falta `{' tras `%s()'" % header["name"])
+	var remaining := rest.substr(1).strip_edges()
+	if remaining == "":
+		state["pos"] += 1
+	else:
+		units[state["pos"]] = {"text": remaining, "op": ";"}
+	var body := _body(state, ["}"])
+	if body["error"] != "":
+		return _err(body["error"])
+	var failure := _expect(state, "}", false)
+	if failure != "":
+		return _err(failure)
+	return {"error": "", "item": {"kind": "funcdef", "name": header["name"], "body": body["items"], "op": unit["op"]}}
+
+
+## ¿Va a empezar un comando tras este texto? (inicio, o tras then/do/else/{ ...): ahí `case` es palabra clave.
+static func _command_position(cur: String) -> bool:
+	var text := cur.strip_edges()
+	return text.ends_with("{") or text.get_slice(" ", text.get_slice_count(" ") - 1) in CASE_PRECEDERS
+
+
+## ¿Empieza la palabra `word` en line[at] y termina ahí?
+static func _word_at(line: String, at: int, word: String) -> bool:
+	if line.substr(at, word.length()) != word:
+		return false
+	var after := at + word.length()
+	return after >= line.length() or not (line[after].is_valid_identifier() or line[after].is_valid_int())
+
+
+static func _is_boundary(text: String, i: int) -> bool:
+	return i == 0 or text[i - 1] in [" ", "\t", ";", "(", ")", "|", "&", "{"]
+
+
+## Índice justo después del esac que cierra el case que empieza en line[start] (-1 si no cierra).
+static func _case_end(line: String, start: int) -> int:
+	var depth := 0
+	var i := start
+	var n := line.length()
+	while i < n:
+		var c := line[i]
+		if c == "'":
+			var close := line.find("'", i + 1)
+			if close == -1:
+				return -1
+			i = close + 1
+			continue
+		if c == "\"":
+			var j := i + 1
+			while j < n and line[j] != "\"":
+				if line[j] == "\\":
+					j += 1
+				j += 1
+			i = j + 1
+			continue
+		if _is_boundary(line, i) and _word_at(line, i, "case"):
+			depth += 1
+			i += 4
+			continue
+		if _is_boundary(line, i) and _word_at(line, i, "esac"):
+			depth -= 1
+			i += 4
+			if depth == 0:
+				return i
+			continue
+		i += 1
+	return -1
+
+
+## Trozos separados por ;; a nivel superior (sin contar los de comillas ni los de case anidados).
+static func _split_clauses(text: String) -> Array:
+	var parts: Array = []
+	var cur := ""
+	var depth := 0
+	var i := 0
+	var n := text.length()
+	while i < n:
+		var c := text[i]
+		if c == "'" or c == "\"":
+			var close := text.find(c, i + 1)
+			if close == -1:
+				close = n - 1
+			cur += text.substr(i, close - i + 1)
+			i = close + 1
+			continue
+		if _is_boundary(text, i) and _word_at(text, i, "case"):
+			depth += 1
+		elif _is_boundary(text, i) and _word_at(text, i, "esac"):
+			depth -= 1
+		if depth == 0 and c == ";" and i + 1 < n and text[i + 1] == ";":
+			parts.append(cur)
+			cur = ""
+			i += 2
+			continue
+		cur += c
+		i += 1
+	parts.append(cur)
+	return parts
+
+
+## Primera palabra de un texto, respetando comillas ("a b" cuenta como una).
+static func _read_word(text: String) -> String:
+	if text == "":
+		return ""
+	if text[0] == "'" or text[0] == "\"":
+		var close := text.find(text[0], 1)
+		return text.substr(0, close + 1) if close != -1 else ""
+	var i := 0
+	while i < text.length() and not text[i] in [" ", "\t"]:
+		i += 1
+	return text.substr(0, i)
+
+
+static func _find_unquoted(text: String, target: String) -> int:
+	var i := 0
+	while i < text.length():
+		var c := text[i]
+		if c == "'" or c == "\"":
+			var close := text.find(c, i + 1)
+			if close == -1:
+				return -1
+			i = close + 1
+			continue
+		if c == target:
+			return i
+		i += 1
+	return -1
+
+
+static func _split_unquoted(text: String, separator: String) -> Array:
+	var parts: Array = []
+	var cur := ""
+	var i := 0
+	while i < text.length():
+		var c := text[i]
+		if c == "'" or c == "\"":
+			var close := text.find(c, i + 1)
+			if close == -1:
+				close = text.length() - 1
+			cur += text.substr(i, close - i + 1)
+			i = close + 1
+			continue
+		if c == separator:
+			parts.append(cur)
+			cur = ""
+		else:
+			cur += c
+		i += 1
+	parts.append(cur)
+	return parts
 
 
 static func _first_word(text: String) -> String:
