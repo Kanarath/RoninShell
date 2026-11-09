@@ -55,6 +55,7 @@ temporal=bloqueada' > estado.conf.copia"],
 	"r_politica": ["echo 'PASS_MIN_LEN 12
 PASS_MAX_DAYS 90' > pass.conf.copia"],
 	"r_avisos": ["nmap -Pn -sV db02", "avisos db02 3306"],
+	"r_cabeceras_faltan": ["curl -I portal01:8080", "hallazgo confirmado 'portal01 no tiene Content-Security-Policy'"],
 	"r_config": ["echo 'AccesoAnonimo no' > copias/servicio.conf"],
 	"r_datos": ["ls -l copias", "chmod 600 copias/nominas.csv"],
 	"r_verificar": ["echo 'SubidasPermitidas no' > copias/servicio.conf", "if grep 'SubidasPermitidas no' copias/servicio.conf; then echo cumple; else echo revisar; fi"],
@@ -106,7 +107,7 @@ func test_los_datos_de_repaso_son_validos() -> void:
 
 func test_cada_reto_de_repaso_apunta_a_un_concepto_que_se_aprende_en_las_misiones() -> void:
 	var main_concepts := {}
-	for path in [MAIN_BOOK, "res://data/missions/tienda_web.json", "res://data/missions/guardia_logs.json", "res://data/missions/endurecimiento.json", "res://data/missions/incidente.json", "res://data/missions/copias.json", "res://data/missions/inventario.json", "res://data/missions/cuentas.json", "res://data/missions/radar.json"]:
+	for path in [MAIN_BOOK, "res://data/missions/tienda_web.json", "res://data/missions/guardia_logs.json", "res://data/missions/endurecimiento.json", "res://data/missions/incidente.json", "res://data/missions/copias.json", "res://data/missions/inventario.json", "res://data/missions/cuentas.json", "res://data/missions/radar.json", "res://data/missions/cabeceras.json"]:
 		for mission: Dictionary in MissionLoader.load_file(path)["book"]["missions"]:
 			for objective: Dictionary in mission["objectives"]:
 				main_concepts[objective["concept"]] = true
@@ -117,7 +118,7 @@ func test_cada_reto_de_repaso_apunta_a_un_concepto_que_se_aprende_en_las_misione
 
 func test_los_laboratorios_de_repaso_son_otras_redes() -> void:
 	var originals: Array = []
-	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json", "res://data/labs/guardia_logs.json", "res://data/labs/endurecimiento.json", "res://data/labs/incidente.json", "res://data/labs/copias.json", "res://data/labs/inventario.json", "res://data/labs/cuentas.json", "res://data/labs/radar.json"]:
+	for path in ["res://data/labs/primer_contacto.json", "res://data/labs/tienda_web.json", "res://data/labs/guardia_logs.json", "res://data/labs/endurecimiento.json", "res://data/labs/incidente.json", "res://data/labs/copias.json", "res://data/labs/inventario.json", "res://data/labs/cuentas.json", "res://data/labs/radar.json", "res://data/labs/cabeceras.json"]:
 		originals.append(LabLoader.load_file(path)["world"])
 	for path in [REVIEW_LAB, "res://data/labs/repaso_web.json", "res://data/labs/repaso_logs.json", "res://data/labs/repaso_config.json", "res://data/labs/repaso_copias.json", "res://data/labs/repaso_inventario.json", "res://data/labs/repaso_cuentas.json"]:
 		var review = LabLoader.load_file(path)["world"]

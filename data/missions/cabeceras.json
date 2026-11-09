@@ -1,0 +1,202 @@
+{
+	"id": "cabeceras",
+	"title": "Auditoría de cabeceras web",
+	"lab": "cabeceras",
+	"missions": [
+		{
+			"id": "h1_comparar",
+			"title": "Comparar cabeceras",
+			"briefing": "Tu propio sitio tiene una web pública y un panel heredado. Antes de opinar sobre cuál está mejor protegida, miras las cabeceras de las dos con tus propios ojos: solo peticiones GET/HEAD, nada de formularios ni de intentos de entrar en ningún sitio.",
+			"objectives": [
+				{
+					"id": "h1_alcance",
+					"text": "Lee la nota del cliente: qué sitio se revisa y qué está permitido hacer",
+					"short": "Lee el alcance",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de pedir nada, confirma qué sitio es tuyo y qué límites tienes.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: solo portal, puerto 80, solo peticiones de lectura."
+					]
+				},
+				{
+					"id": "h2_pagina",
+					"text": "Pide las cabeceras de la página principal (curl -I portal)",
+					"short": "Cabeceras de la página principal",
+					"concept": "cabeceras_http",
+					"requires": ["h1_alcance"],
+					"check": {"event": "headers_seen", "where": {"ip": "10.0.16.10", "path": "/"}},
+					"hints": [
+						"-I pide solo las cabeceras, sin el cuerpo de la página.",
+						"El sitio responde en el puerto 80 por defecto, no hace falta indicarlo.",
+						"`curl -I portal` muestra varias cabeceras de seguridad: CSP, X-Frame-Options, HSTS..."
+					]
+				},
+				{
+					"id": "h3_legacy",
+					"text": "Pide las cabeceras del panel heredado (curl -I portal/legacy)",
+					"short": "Cabeceras del panel heredado",
+					"concept": "cabeceras_http",
+					"requires": ["h2_pagina"],
+					"check": {"event": "headers_seen", "where": {"ip": "10.0.16.10", "path": "/legacy"}},
+					"hints": [
+						"Es la misma petición, a otra ruta.",
+						"`curl -I portal/legacy`",
+						"Comparado con la página principal, aquí faltan varias cabeceras de seguridad."
+					]
+				},
+				{
+					"id": "h4_hecho",
+					"text": "Anota con la clasificación correcta lo que está comprobado al comparar las dos rutas (`hallazgo`)",
+					"short": "Anota la comparación como hecho",
+					"concept": "analisis_hallazgos",
+					"requires": ["h3_legacy"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["legacy"]}},
+					"classify": {
+						"keywords": ["legacy", "cabecera"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: has pedido las cabeceras de las dos rutas tú mismo y puedes mostrar la diferencia. Eso es un hecho, no una suposición.",
+						"feedback": {
+							"indicio": "No es indirecto: las dos respuestas están delante de ti, comparadas.",
+							"hipotesis": "No hay que suponer nada: has pedido ambas cabeceras y la diferencia es observable.",
+							"falso-positivo": "No lo es: /legacy responde de verdad sin esas cabeceras."
+						}
+					},
+					"hints": [
+						"Lo comprobado es la comparación: qué tiene una ruta y qué le falta a la otra.",
+						"Menciona /legacy y qué cabeceras no están, comparado con /.",
+						"`hallazgo confirmado \"/legacy no tiene Content-Security-Policy ni Strict-Transport-Security, a diferencia de /\"`"
+					]
+				}
+			]
+		},
+		{
+			"id": "h2_rutas",
+			"title": "Rutas que no deberían estar expuestas",
+			"briefing": "robots.txt dice qué rutas no quiere el sitio que indexen los buscadores, pero eso no las protege: solo pide no mirarlas. Compruebas si están ahí de verdad.",
+			"objectives": [
+				{
+					"id": "h5_robots",
+					"text": "Lee robots.txt del sitio",
+					"short": "Lee robots.txt",
+					"concept": "http",
+					"requires": ["h3_legacy"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.16.10", "path": "/robots.txt"}},
+					"hints": [
+						"robots.txt es un archivo normal de texto, como cualquier otra ruta.",
+						"`curl portal/robots.txt`",
+						"Disallow no bloquea nada: solo pide a los buscadores que no lo indexen."
+					]
+				},
+				{
+					"id": "h6_export",
+					"text": "Pide la ruta que robots.txt menciona pero que no está enlazada desde ningún sitio (/legacy/export)",
+					"short": "Comprueba si la ruta oculta responde",
+					"concept": "http",
+					"requires": ["h5_robots"],
+					"check": {"event": "http_response", "where": {"ip": "10.0.16.10", "path": "/legacy/export", "status": 200}},
+					"evidence": {"id": "evh_export", "title": "Ruta expuesta sin enlazar", "detail": "/legacy/export responde 200 sin estar enlazada ni requerir sesión"},
+					"hints": [
+						"Es la misma ruta que viste en robots.txt, pedida directamente.",
+						"`curl portal/legacy/export`",
+						"Responde 200: está accesible, aunque nadie enlace a ella."
+					]
+				},
+				{
+					"id": "h7_hecho",
+					"text": "Anota con la clasificación correcta lo que está comprobado sobre /legacy/export (`hallazgo`)",
+					"short": "Anota el hecho de la ruta expuesta",
+					"concept": "analisis_hallazgos",
+					"requires": ["h6_export"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["export"]}},
+					"classify": {
+						"keywords": ["export"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: la ruta responde 200 de verdad, lo has comprobado tú mismo. Eso es un hecho.",
+						"feedback": {
+							"indicio": "No es indirecto: la pediste y respondió 200, directamente.",
+							"hipotesis": "No hay que suponer nada: la respuesta ya lo confirma.",
+							"falso-positivo": "No lo es: la ruta responde de verdad, sin enlace ni sesión."
+						}
+					},
+					"hints": [
+						"Lo comprobado es que la ruta responde, sin estar enlazada ni pedir sesión.",
+						"Menciona la ruta y que responde sin más.",
+						"`hallazgo confirmado \"/legacy/export responde 200 sin estar enlazada ni requerir sesión\"`"
+					]
+				},
+				{
+					"id": "h8_transfer",
+					"text": "Transferencia: anota con la clasificación correcta una posible razón de por qué sigue expuesta, sin haberla comprobado (`hallazgo`)",
+					"short": "Transferencia: la causa como suposición",
+					"concept": "analisis_hallazgos",
+					"transfer": true,
+					"requires": ["h7_hecho"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["hipotesis", "indicio"]}, "contains": {"text": ["olvid"]}},
+					"classify": {
+						"keywords": ["olvid", "retir", "heredad"],
+						"accepted": ["hipotesis", "indicio"],
+						"ok": "Bien: el comentario en /legacy sugiere que se olvidó retirar, pero eso no lo confirma ninguna respuesta: sigue siendo una suposición.",
+						"feedback": {
+							"confirmado": "Todavía no: ninguna respuesta dice POR QUÉ sigue ahí, solo que sigue ahí.",
+							"falso-positivo": "No hay base para descartarlo: el panel y la ruta siguen respondiendo."
+						}
+					},
+					"hints": [
+						"El comentario del HTML da una pista, pero una pista no es una prueba.",
+						"Si no puedes demostrar el motivo con una respuesta, no es un hecho.",
+						"`hallazgo hipotesis \"el panel heredado se olvidó retirar al migrar al nuevo portal\"`"
+					]
+				}
+			]
+		},
+		{
+			"id": "h3_cierre",
+			"title": "Priorizar y recomendar",
+			"briefing": "Para cerrar, compruebas con un `if` si el panel heredado tiene cabeceras de seguridad, y escribes un informe que diga qué corregir primero: una cabecera que falta no es lo mismo que una ruta entera expuesta sin control.",
+			"objectives": [
+				{
+					"id": "h9_verificar",
+					"text": "Comprueba con un `if` si /legacy tiene la cabecera Content-Security-Policy (combina curl con grep)",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["h4_hecho"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"curl -I es un comando como cualquier otro: su salida se puede filtrar con grep dentro de un if.",
+						"if curl -I <ruta> | grep Content-Security-Policy; then echo ...; else echo ...; fi",
+						"`if curl -I portal/legacy | grep Content-Security-Policy; then echo presente; else echo ausente; fi` dice ausente."
+					]
+				},
+				{
+					"id": "h10_informe",
+					"text": "Redacta en informe/borrador.md qué falta y qué sobra, dónde, la evidencia, el riesgo, qué se corrige primero y por qué, y supera la revisión (`revisar`)",
+					"short": "Informe de cabeceras",
+					"concept": "informe",
+					"requires": ["h8_transfer", "h9_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 180,
+						"forbidden": ["hackead", "comprometid", "exploit"],
+						"elements": [
+							{"id": "que", "label": "Qué: cabeceras que faltan y ruta expuesta", "any": ["content-security-policy", "strict-transport-security", "x-frame-options", "cabecera", "export"]},
+							{"id": "donde", "label": "Dónde: rutas afectadas", "any": ["/legacy", "legacy/export", "portal"]},
+							{"id": "evidencia", "label": "Evidencia: lo que mostraron las respuestas", "any": ["curl", "robots.txt", "200", "apache/2.2"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "sin proteger", "acceso no autorizado", "información interna"]},
+							{"id": "prioridad", "label": "Prioridad: qué se corrige primero y por qué", "any": ["primero", "antes que", "prioridad", "más urgente"]},
+							{"id": "medidas", "label": "Medidas: qué se recomienda", "any": ["añadir", "configurar", "restringir", "retirar", "requerir sesión", "autenticación"]}
+						]
+					},
+					"evidence": {"id": "evh_informe", "title": "Informe de cabeceras", "detail": "borrador.md prioriza la ruta expuesta sobre las cabeceras que faltan"},
+					"hints": [
+						"Un buen informe: qué falta y qué sobra, dónde, evidencia, riesgo, qué va primero y qué se recomienda. Sin afirmar lo que no probaste.",
+						"Escríbelo con `nano informe/borrador.md` y comprueba con `revisar` qué falta.",
+						"Ejemplo: \"La ruta /legacy no tiene Content-Security-Policy ni Strict-Transport-Security, a diferencia de /. Además, /legacy/export responde 200 sin estar enlazada ni requerir sesión, según robots.txt y curl. Riesgo: información interna accesible sin control. Prioridad: cerrar o proteger /legacy/export primero, por ser una ruta entera expuesta, y después añadir las cabeceras que faltan. Se recomienda requerir sesión en /legacy/export, configurar las cabeceras de seguridad y retirar el panel heredado si ya no se usa.\""
+					]
+				}
+			]
+		}
+	]
+}

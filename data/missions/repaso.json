@@ -825,6 +825,30 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_cabeceras_faltan",
+			"concept": "cabeceras_http",
+			"lab": "repaso_web",
+			"title": "Repaso: qué cabeceras faltan",
+			"briefing": "portal01 tiene una página principal. Mira sus cabeceras y anota qué cabeceras de seguridad habituales no están.",
+			"objectives": [
+				{
+					"id": "r_cab_faltan",
+					"text": "Pide las cabeceras de portal01:8080 y anota con la clasificación correcta qué cabeceras de seguridad faltan (`hallazgo`)",
+					"short": "Anota las cabeceras que faltan",
+					"concept": "cabeceras_http",
+					"check": {"all": [
+						{"event": "headers_seen", "where": {"ip": "10.0.3.10", "path": "/"}},
+						{"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["content-security-policy"]}}
+					]},
+					"hints": [
+						"-I pide solo las cabeceras.",
+						"Compara lo que ves con cabeceras habituales como Content-Security-Policy, Strict-Transport-Security o X-Content-Type-Options.",
+						"`curl -I portal01:8080` y `hallazgo confirmado \"portal01 no tiene Content-Security-Policy\"`."
+					]
+				}
+			]
 		}
 	]
 }

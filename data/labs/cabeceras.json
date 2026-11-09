@@ -1,0 +1,84 @@
+{
+	"id": "cabeceras",
+	"title": "Auditoría de cabeceras web",
+	"cidr": "10.0.16.0/24",
+	"player_host": "10.0.16.2",
+	"hosts": [
+		{
+			"ip": "10.0.16.2",
+			"hostname": "auditorweb14",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/hosts": {
+					"type": "file",
+					"content": "127.0.0.1 localhost\n10.0.16.2 auditorweb14\n10.0.16.10 portal\n"
+				},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "AUDITORÍA DE CABECERAS WEB (observación, sin tocar nada)\nSitio propio: portal (10.0.16.10), puerto 80. Alojan la web pública y un panel heredado que ya nadie mantiene.\nObjetivo: comparar las cabeceras de seguridad entre rutas, ver qué rutas quedan accesibles sin estar enlazadas y priorizar qué corregir.\nSolo se mira: peticiones GET/HEAD. No se envía nada, no se prueba a entrar en ningún sitio.\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de cabeceras\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.16.10",
+			"hostname": "portal",
+			"os": "Linux",
+			"services": [
+				{"port": 80, "state": "open", "name": "http", "product": "nginx", "version": "1.22.1", "banner": "nginx/1.22.1"}
+			],
+			"sites": {
+				"80": {
+					"server": "nginx/1.22.1",
+					"routes": {
+						"/": {
+							"status": 200,
+							"headers": {
+								"Content-Type": "text/html",
+								"Content-Security-Policy": "default-src 'self'",
+								"X-Frame-Options": "DENY",
+								"X-Content-Type-Options": "nosniff",
+								"Strict-Transport-Security": "max-age=63072000"
+							},
+							"body": "<html>\n<head><title>Portal</title></head>\n<body>\n<h1>Bienvenido al portal</h1>\n</body>\n</html>\n"
+						},
+						"/robots.txt": {
+							"status": 200,
+							"headers": {"Content-Type": "text/plain"},
+							"body": "User-agent: *\nDisallow: /legacy\nDisallow: /legacy/export\n"
+						},
+						"/legacy": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html", "Server": "Apache/2.2.15 (CentOS)"},
+							"body": "<html>\n<head><title>Panel heredado</title></head>\n<body>\n<h1>Panel heredado</h1>\n<!-- TODO: retirar este panel, ya no lo usa nadie -->\n<a href=\"/legacy/export\">Exportaciones</a>\n</body>\n</html>\n"
+						},
+						"/legacy/export": {
+							"status": 200,
+							"headers": {"Content-Type": "text/html", "Server": "Apache/2.2.15 (CentOS)"},
+							"body": "<html>\n<head><title>Exportaciones</title></head>\n<body>\n<h1>Exportaciones internas</h1>\n<p>Este listado es para uso interno: no debería poder pedirse desde fuera sin haber iniciado sesión.</p>\n</body>\n</html>\n"
+						}
+					}
+				}
+			}
+		}
+	]
+}
