@@ -1,0 +1,160 @@
+{
+	"id": "radar",
+	"title": "Radar de vulnerabilidades",
+	"lab": "radar",
+	"missions": [
+		{
+			"id": "v1_detectar",
+			"title": "Detectar versiones",
+			"briefing": "No se puede evaluar el riesgo de un servicio sin saber qué versión es. En tu red propia hay tres servidores que no se revisan desde hace tiempo. Identificas qué ofrecen y, con lo que ya sabes, consultas si hay avisos de seguridad conocidos para esas versiones exactas.",
+			"objectives": [
+				{
+					"id": "v1_alcance",
+					"text": "Lee la nota del cliente: qué red se revisa y con qué límites",
+					"short": "Lee el alcance",
+					"concept": "alcance",
+					"check": {"event": "file_read", "where": {"path": "/home/ronin/cliente.txt"}},
+					"hints": [
+						"Antes de tocar nada, confirma qué red es tuya y qué se espera de ti.",
+						"La nota está en tu directorio personal.",
+						"`cat cliente.txt`: red 10.0.15.0/24, solo se propone, no se ejecuta ningún cambio real."
+					]
+				},
+				{
+					"id": "v1_escanear",
+					"text": "Descubre los servidores de la red e identifica el producto y la versión de cada servicio (nmap -sV sobre toda la red)",
+					"short": "Escanea versiones de toda la red",
+					"concept": "versiones",
+					"requires": ["v1_alcance"],
+					"check": {"event": "service_version", "distinct": "ip", "min": 3},
+					"hints": [
+						"Un solo escaneo con -sV sobre la notación de red detecta producto y versión de cada host.",
+						"nmap acepta la red completa como objetivo.",
+						"`nmap -sV 10.0.15.0/24` muestra los tres servidores con sus versiones."
+					]
+				},
+				{
+					"id": "v1_consultar",
+					"text": "Consulta los avisos conocidos para Apache en repositorio (puerto 80): avisos repositorio 80",
+					"short": "Consulta avisos de Apache en repositorio",
+					"concept": "analisis_vulnerabilidades",
+					"requires": ["v1_escanear"],
+					"check": {"event": "advisory_checked", "where": {"ip": "10.0.15.11", "port": 80, "found": [true]}},
+					"evidence": {"id": "evr_apache", "title": "Aviso crítico en repositorio", "detail": "Apache httpd 2.4.49: SIM-2021-0441, CVSS 9.8"},
+					"hints": [
+						"avisos necesita que ya conozcas la versión de ese servicio (con nmap -sV).",
+						"El comando es: avisos <host> <puerto>.",
+						"`avisos repositorio 80` muestra un aviso crítico (CVSS 9.8)."
+					]
+				}
+			]
+		},
+		{
+			"id": "v2_comparar",
+			"title": "Comparar y priorizar",
+			"briefing": "Con un servicio ya revisado, haces lo mismo con los demás. No todos los avisos pesan igual: el objetivo es saber cuál urge más.",
+			"objectives": [
+				{
+					"id": "v2_mas",
+					"text": "Consulta también los avisos de vsftpd en repositorio (puerto 21) y de MariaDB en basedatos (puerto 3306)",
+					"short": "Consulta dos avisos más",
+					"concept": "analisis_vulnerabilidades",
+					"requires": ["v1_consultar"],
+					"check": {"all": [
+						{"event": "advisory_checked", "where": {"ip": "10.0.15.11", "port": 21, "found": [true]}},
+						{"event": "advisory_checked", "where": {"ip": "10.0.15.12", "port": 3306, "found": [true]}}
+					]},
+					"hints": [
+						"Cada consulta es el mismo comando, con otro host y otro puerto.",
+						"Primero habrás tenido que ver esas versiones con nmap -sV, como ya hiciste.",
+						"`avisos repositorio 21` y `avisos basedatos 3306`."
+					]
+				},
+				{
+					"id": "v2_hecho",
+					"text": "Anota con la clasificación correcta lo que está comprobado sobre el aviso de Apache en repositorio (`hallazgo`)",
+					"short": "Anota el hallazgo del aviso crítico",
+					"concept": "analisis_hallazgos",
+					"requires": ["v2_mas"],
+					"check": {"event": "finding_recorded", "where": {"kind": ["confirmado"]}, "contains": {"text": ["2.4.49"]}},
+					"classify": {
+						"keywords": ["2.4.49", "apache"],
+						"accepted": ["confirmado"],
+						"ok": "Bien: el aviso lo da la propia base de datos para esa versión exacta; que existe ese aviso es un hecho verificable, no una suposición.",
+						"feedback": {
+							"indicio": "No es indirecto: la consulta a la base de datos lo confirma de forma directa.",
+							"hipotesis": "No hay que suponer nada: el aviso existe para esa versión exacta, lo has comprobado tú mismo.",
+							"falso-positivo": "No lo es: el servicio sigue en esa versión y el aviso sigue vigente."
+						}
+					},
+					"hints": [
+						"Lo comprobado es lo que la consulta te devolvió: el producto, la versión y el aviso.",
+						"Menciona la versión y que tiene un aviso crítico.",
+						"`hallazgo confirmado \"Apache httpd 2.4.49 en repositorio tiene el aviso SIM-2021-0441, crítico (CVSS 9.8)\"`"
+					]
+				},
+				{
+					"id": "v2_transfer",
+					"text": "Transferencia: aplica lo mismo a OpenSSH en correo (puerto 22)",
+					"short": "Transferencia: avisos de OpenSSH en correo",
+					"concept": "analisis_vulnerabilidades",
+					"transfer": true,
+					"requires": ["v2_mas"],
+					"check": {"event": "advisory_checked", "where": {"ip": "10.0.15.10", "port": 22, "found": [true]}},
+					"hints": [
+						"Es el mismo procedimiento con otro host y otro puerto.",
+						"Primero hace falta haberlo escaneado con -sV, cosa que ya hiciste al escanear toda la red.",
+						"`avisos correo 22`"
+					]
+				}
+			]
+		},
+		{
+			"id": "v3_cerrar",
+			"title": "Priorizar y recomendar",
+			"briefing": "Para cerrar, compruebas con un `if` que el aviso más grave sigue ahí y escribes un informe que diga qué se actualiza primero y por qué. No hay parches que aplicar aquí: la recomendación es el entregable.",
+			"objectives": [
+				{
+					"id": "v3_verificar",
+					"text": "Comprueba con un `if` que el aviso de Apache en repositorio sigue siendo CRÍTICO (combina avisos con grep)",
+					"short": "Verifica con un if",
+					"concept": "verificacion",
+					"requires": ["v2_hecho"],
+					"check": {"event": "if_ran"},
+					"hints": [
+						"avisos es un comando como cualquier otro: su salida se puede filtrar con grep dentro de un if.",
+						"if avisos <host> <puerto> | grep CRÍTICO; then echo ...; else echo ...; fi",
+						"`if avisos repositorio 80 | grep CRÍTICO; then echo confirmado; else echo revisar; fi`"
+					]
+				},
+				{
+					"id": "v3_informe",
+					"text": "Redacta en informe/borrador.md qué versiones tienen avisos, dónde, la evidencia, el riesgo, cuál se actualiza primero y por qué, y supera la revisión (`revisar`)",
+					"short": "Informe de vulnerabilidades",
+					"concept": "informe",
+					"requires": ["v2_transfer", "v3_verificar"],
+					"check": {"event": "report_complete", "where": {"path": "/home/ronin/informe/borrador.md"}},
+					"report": {
+						"path": "/home/ronin/informe/borrador.md",
+						"min_chars": 180,
+						"forbidden": ["hackead", "comprometid", "exploit"],
+						"elements": [
+							{"id": "que", "label": "Qué: versiones con avisos conocidos", "any": ["2.4.49", "3.0.3", "10.3.29", "7.9p1", "apache", "vsftpd", "mariadb"]},
+							{"id": "donde", "label": "Dónde: servidores afectados", "any": ["repositorio", "correo", "basedatos"]},
+							{"id": "evidencia", "label": "Evidencia: avisos encontrados", "any": ["sim-2021-0441", "cvss", "critico", "crítico"]},
+							{"id": "riesgo", "label": "Riesgo: por qué importa", "any": ["riesgo", "ruta", "texto claro", "denegaci", "sin cifrar"]},
+							{"id": "prioridad", "label": "Prioridad: cuál se actualiza primero y por qué", "any": ["primero", "antes que", "prioridad", "más urgente", "mayor gravedad"]},
+							{"id": "medidas", "label": "Medidas: qué se recomienda", "any": ["actualizar", "parchear", "parche", "nueva versión", "migrar"]}
+						]
+					},
+					"evidence": {"id": "evr_informe", "title": "Informe de vulnerabilidades", "detail": "borrador.md prioriza las versiones con avisos conocidos"},
+					"hints": [
+						"Un buen informe: qué versiones, dónde, evidencia, riesgo, cuál va primero y qué se recomienda. Sin afirmar lo que no probaste.",
+						"Escríbelo con `nano informe/borrador.md` y comprueba con `revisar` qué falta.",
+						"Ejemplo: \"Apache httpd 2.4.49 en repositorio tiene el aviso SIM-2021-0441, crítico (CVSS 9.8, riesgo de ruta). vsftpd 3.0.3 en repositorio y MariaDB 10.3.29 en basedatos tienen avisos de gravedad media (texto claro y denegación de servicio). OpenSSH 7.9p1 en correo tiene un aviso de gravedad baja. Prioridad: Apache primero, por ser el de mayor gravedad; los demás después. Se recomienda actualizar o parchear cada servicio a la versión corregida.\""
+					]
+				}
+			]
+		}
+	]
+}

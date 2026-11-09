@@ -178,7 +178,7 @@ func _nmap(session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 		for row: Dictionary in report["rows"]:
 			session.record("port_found", {"ip": entry["ip"], "port": row["port"], "state": row["state"], "service": row["service"]})
 			if options["version"] and row["detail"] != "":
-				session.record("service_version", {"ip": entry["ip"], "port": row["port"], "detail": row["detail"]})
+				session.record("service_version", {"ip": entry["ip"], "port": row["port"], "detail": row["detail"], "product": row["product"], "version": row["service_version_number"]})
 		detection_used = detection_used or (options["version"] and report["open"] > 0)
 
 	if options["ping_only"]:
@@ -350,9 +350,13 @@ func _scan_report(entry: Dictionary, ports: Array[int], version_scan: bool) -> D
 		else:
 			shown_name = WELL_KNOWN.get(port, "unknown")
 		var detail := ""
+		var product := ""
+		var version_number := ""
 		if version_scan and service != null and state == "open":
 			detail = ("%s %s" % [service.product, service.version]).strip_edges()
-		rows.append({"port": port, "state": state, "service": shown_name, "detail": detail})
+			product = service.product
+			version_number = service.version
+		rows.append({"port": port, "state": state, "service": shown_name, "detail": detail, "product": product, "service_version_number": version_number})
 
 	# Si un estado (cerrado/filtrado) domina con muchos puertos, nmap lo resume en una línea.
 	var counts := {"closed": 0, "filtered": 0}

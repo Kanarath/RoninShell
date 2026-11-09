@@ -251,7 +251,7 @@ func test_el_libro_completado_desde_el_panel_desbloquea_el_siguiente() -> void:
 	var root := _main()
 	root.debug_panel.press("Libro completado")
 	assert_true(root.engines["primer_contacto"].is_finished())
-	assert_eq(root.controller.book_states, {"primer_contacto": "completado", "tienda_web": "disponible", "guardia_logs": "bloqueado", "endurecimiento": "bloqueado", "incidente": "bloqueado", "copias": "bloqueado", "inventario": "bloqueado", "cuentas": "bloqueado"})
+	assert_eq(root.controller.book_states, {"primer_contacto": "completado", "tienda_web": "disponible", "guardia_logs": "bloqueado", "endurecimiento": "bloqueado", "incidente": "bloqueado", "copias": "bloqueado", "inventario": "bloqueado", "cuentas": "bloqueado", "radar": "bloqueado"})
 	_dispose(root)
 
 

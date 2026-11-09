@@ -5,7 +5,7 @@ extends RefCounted
 ## El árbol de habilidades: grupos de conceptos en el orden en que se aprenden.
 const TREE := [
 	{"title": "Fundamentos Linux", "concepts": [["navegacion", "Navegación"], ["archivos_ocultos", "Ocultos"], ["usuarios", "Usuarios"], ["permisos", "Permisos"], ["gestion_archivos", "Archivos"]]},
-	{"title": "Redes y reconocimiento", "concepts": [["descubrimiento_hosts", "Descubrir"], ["puertos_servicios", "Puertos"], ["versiones", "Versiones"], ["interpretacion_resultados", "Interpretar"], ["inventario", "Inventario"], ["exposicion", "Exposición"]]},
+	{"title": "Redes y reconocimiento", "concepts": [["descubrimiento_hosts", "Descubrir"], ["puertos_servicios", "Puertos"], ["versiones", "Versiones"], ["interpretacion_resultados", "Interpretar"], ["inventario", "Inventario"], ["exposicion", "Exposición"], ["analisis_vulnerabilidades", "Avisos"]]},
 	{"title": "Web", "concepts": [["http", "HTTP"], ["cabeceras_http", "Cabeceras"], ["cookies_sesiones", "Cookies"], ["control_acceso", "Acceso"]]},
 	{"title": "Análisis e informe", "concepts": [["alcance", "Alcance"], ["analisis_hallazgos", "Hallazgos"], ["analisis_logs", "Logs"], ["informe", "Informe"]]},
 	{"title": "Automatización", "concepts": [["tuberias", "Tuberías"], ["variables_shell", "Variables"], ["bucles", "Bucles"], ["encadenar_comandos", "Encadenar"], ["comodines", "Comodines"], ["funciones_shell", "Funciones"], ["seleccion_case", "Case"]]},

@@ -804,6 +804,27 @@
 					]
 				}
 			]
+		},
+		{
+			"id": "r_avisos",
+			"concept": "analisis_vulnerabilidades",
+			"lab": "repaso_red",
+			"title": "Repaso: avisos de seguridad",
+			"briefing": "db02 ofrece un servicio de base de datos. Identifica su versión y consulta si tiene avisos de seguridad conocidos.",
+			"objectives": [
+				{
+					"id": "r_avi_consultar",
+					"text": "Identifica la versión del servicio de db02 y consulta sus avisos de seguridad (avisos)",
+					"short": "Consulta los avisos de db02",
+					"concept": "analisis_vulnerabilidades",
+					"check": {"event": "advisory_checked", "where": {"ip": "10.0.1.10", "port": 3306, "found": [true]}},
+					"hints": [
+						"avisos necesita que ya conozcas la versión del servicio: primero tócala con nmap -sV.",
+						"db02 ignora el ping, así que hace falta -Pn además de -sV.",
+						"`nmap -Pn -sV db02` y después `avisos db02 3306`."
+					]
+				}
+			]
 		}
 	]
 }

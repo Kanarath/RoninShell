@@ -1,0 +1,66 @@
+{
+	"id": "radar",
+	"title": "Radar de vulnerabilidades",
+	"cidr": "10.0.15.0/24",
+	"player_host": "10.0.15.2",
+	"hosts": [
+		{
+			"ip": "10.0.15.2",
+			"hostname": "analista13",
+			"os": "Linux",
+			"users": [
+				{"name": "ronin", "uid": 1000, "home": "/home/ronin"},
+				{"name": "root", "uid": 0, "home": "/root"}
+			],
+			"fs": {
+				"/etc": {"type": "dir"},
+				"/etc/passwd": {
+					"type": "file",
+					"content": "root:x:0:0:root:/root:/bin/bash\nronin:x:1000:1000:Ronin:/home/ronin:/bin/bash\n"
+				},
+				"/home": {"type": "dir"},
+				"/home/ronin": {"type": "dir", "owner": "ronin", "group": "ronin", "mode": "750"},
+				"/home/ronin/cliente.txt": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "RADAR DE VULNERABILIDADES (defensivo)\nRed propia autorizada: 10.0.15.0/24. Tres servidores propios ofrecen servicios con versiones que no se han revisado en un tiempo.\nObjetivo: identificar qué versiones corren, mirar si tienen avisos de seguridad conocidos, decidir qué se actualiza antes y proponerlo.\nNo se actualiza ni se toca nada en producción: esta revisión propone, no ejecuta.\n"
+				},
+				"/home/ronin/informe": {"type": "dir", "owner": "ronin", "group": "ronin"},
+				"/home/ronin/informe/borrador.md": {
+					"type": "file",
+					"owner": "ronin",
+					"group": "ronin",
+					"content": "# Informe de vulnerabilidades\n\nPendiente de completar.\n"
+				}
+			}
+		},
+		{
+			"ip": "10.0.15.10",
+			"hostname": "correo",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "7.9p1", "banner": "SSH-2.0-OpenSSH_7.9p1"},
+				{"port": 80, "state": "open", "name": "http", "product": "nginx", "version": "1.14.0", "banner": "nginx/1.14.0"}
+			]
+		},
+		{
+			"ip": "10.0.15.11",
+			"hostname": "repositorio",
+			"os": "Linux",
+			"services": [
+				{"port": 21, "state": "open", "name": "ftp", "product": "vsftpd", "version": "3.0.3", "banner": "220 (vsFTPd 3.0.3)"},
+				{"port": 80, "state": "open", "name": "http", "product": "Apache httpd", "version": "2.4.49", "banner": "Apache/2.4.49 (Unix)"}
+			]
+		},
+		{
+			"ip": "10.0.15.12",
+			"hostname": "basedatos",
+			"os": "Linux",
+			"services": [
+				{"port": 22, "state": "open", "name": "ssh", "product": "OpenSSH", "version": "8.2p1", "banner": "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5"},
+				{"port": 3306, "state": "open", "name": "mysql", "product": "MariaDB", "version": "10.3.29", "banner": "5.5.5-10.3.29-MariaDB"}
+			]
+		}
+	]
+}
