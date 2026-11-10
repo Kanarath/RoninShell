@@ -11,7 +11,7 @@ const PAGES := [
 	["La terminal", "Escribe directamente, no hace falta hacer clic. Enter ejecuta; Tab completa; las flechas ↑ ↓ repiten comandos.\n\nPrueba ahora con `ls` para ver qué hay en tu carpeta."],
 	["Misiones cortas", "A la derecha ves la misión y sus objetivos, uno por uno. Cada objetivo es una victoria pequeña.\n\nNo hay temporizadores ni vidas: equivocarte no resta nada."],
 	["Pistas sin penalización", "¿Atascado? Escribe `pista`: cada vez te da una ayuda más concreta, hasta la solución explicada. Es parte del aprendizaje, no un fallo.\n\nTambién tienes `<comando> --help`, `man <comando>` y la chuleta (F1)."],
-	["Atajos", "F1 chuleta  ·  F3 perfil y logros  ·  F4 «¿qué hago ahora?»  ·  F9 menú  ·  F10 ajustes  ·  Esc cierra cualquier ventana.\n\nSi en algún momento no sabes por dónde seguir, F4 te lo dice sin gastar pistas."],
+	["Atajos", "F1 chuleta  ·  F3 perfil y logros  ·  F4 «¿qué hago ahora?»  ·  F5 resumen de campaña  ·  F9 menú  ·  F10 ajustes  ·  Esc cierra cualquier ventana.\n\nSi en algún momento no sabes por dónde seguir, F4 te lo dice sin gastar pistas."],
 	["A tu ritmo", "El juego te recordará con suavidad que hagas pausas, y puedes apagar esos avisos, los sonidos y los efectos en F10.\n\nEl modo libre (`modo libre`) es un laboratorio sin objetivos para experimentar. Para ver este tutorial otra vez: `tutorial`."],
 ]
 

@@ -24,6 +24,7 @@ const CheatsheetPanel := preload("res://ui/widgets/cheatsheet_panel.gd")
 const SettingsPanel := preload("res://ui/widgets/settings_panel.gd")
 const DebugPanel := preload("res://ui/widgets/debug_panel.gd")
 const ProfilePanel := preload("res://ui/widgets/profile_panel.gd")
+const CampaignPanel := preload("res://ui/widgets/campaign_panel.gd")
 const EditorPanel := preload("res://ui/widgets/editor_panel.gd")
 const TutorialPanel := preload("res://ui/widgets/tutorial_panel.gd")
 const NowPanel := preload("res://ui/widgets/now_panel.gd")
@@ -92,6 +93,7 @@ var cheatsheet_panel := CheatsheetPanel.new()
 var settings_panel := SettingsPanel.new()
 var debug_panel := DebugPanel.new()
 var profile_panel := ProfilePanel.new()
+var campaign_panel := CampaignPanel.new()
 var editor_panel := EditorPanel.new()
 var tutorial_panel := TutorialPanel.new()
 var now_panel := NowPanel.new()
@@ -146,6 +148,7 @@ func _ready() -> void:
 	var screenshot_path := ""
 	var show_menu := persist   # los tests y las capturas (sin guardado) arrancan directos al juego
 	var open_profile := false
+	var open_campaign := false
 	var shot_delay := 1.0
 	var boot_forced := false
 	for arg in OS.get_cmdline_user_args():
@@ -174,6 +177,9 @@ func _ready() -> void:
 		elif arg == "--open=now":
 			_show_now()
 			show_menu = false
+		elif arg == "--open=campaign":
+			open_campaign = true
+			show_menu = false
 		elif arg == "--open=menu":
 			show_menu = true
 		elif arg == "--open=expand":
@@ -195,6 +201,9 @@ func _ready() -> void:
 	if open_profile:
 		_refresh_profile()
 		profile_panel.open()
+	if open_campaign:
+		_refresh_campaign_panel()
+		campaign_panel.open()
 	if boot_forced or (persist and show_menu and not "--open=menu" in OS.get_cmdline_user_args()):
 		_menu_after_boot = show_menu
 		_play_boot()
@@ -248,7 +257,7 @@ func _input(event: InputEvent) -> void:
 
 ## Las ventanas que se alternan con una tecla (el editor, el tutorial y el menú inicial tienen su propia lógica).
 func _panels() -> Array:
-	return [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, expand_view]
+	return [cheatsheet_panel, settings_panel, debug_panel, profile_panel, campaign_panel, now_panel, expand_view]
 
 
 func _close_panels_except(keep: Control) -> void:
@@ -281,6 +290,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F3:
 			_close_panels_except(profile_panel)
 			_toggle_profile()
+		KEY_F5:
+			_close_panels_except(campaign_panel)
+			_toggle_campaign_panel()
 		KEY_F4:
 			_close_panels_except(now_panel)
 			if now_panel.is_open():
@@ -308,7 +320,7 @@ func _process(delta: float) -> void:
 
 
 func _build_modals() -> void:
-	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, now_panel, expand_view, editor_panel, tutorial_panel]:
+	for panel in [cheatsheet_panel, settings_panel, debug_panel, profile_panel, campaign_panel, now_panel, expand_view, editor_panel, tutorial_panel]:
 		add_child(panel)
 		panel.opened.connect(_on_modal_changed)
 		panel.closed.connect(_on_modal_changed)
@@ -336,6 +348,34 @@ func _toggle_profile() -> void:
 	else:
 		_refresh_profile()
 		profile_panel.open()
+
+
+func _toggle_campaign_panel() -> void:
+	if campaign_panel.is_open():
+		campaign_panel.close()
+	else:
+		_refresh_campaign_panel()
+		campaign_panel.open()
+
+
+## Los laboratorios de la campaña de un vistazo, con el progreso real de cada uno (no solo el activo).
+func _refresh_campaign_panel() -> void:
+	var entries: Array = []
+	for entry: Dictionary in CAMPAIGN:
+		var id: String = entry["id"]
+		if not books.has(id) or not engines.has(id):
+			continue
+		var engine: RefCounted = engines[id]
+		entries.append({
+			"id": id,
+			"title": books[id].get("title", id),
+			"state": controller.book_states.get(id, "bloqueado"),
+			"active": id == controller.active_book,
+			"missions_done": engine.mission_index,
+			"missions_total": engine.book["missions"].size(),
+			"xp": engine.xp,
+		})
+	campaign_panel.refresh(entries)
 
 
 ## Lo que muestra el perfil: árbol de habilidades y logros, calculados del progreso real.
@@ -1162,7 +1202,7 @@ func _build_top_bar() -> Control:
 	brand.add_child(_build_xp_bar())
 
 	var hint := Label.new()
-	hint.text = "F1  chuleta   F3  perfil   F4  ahora   F9  menú   F10  ajustes   F11  pruebas"
+	hint.text = "F1  chuleta   F3  perfil   F4  ahora   F5  campaña   F9  menú   F10  ajustes   F11  pruebas"
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
