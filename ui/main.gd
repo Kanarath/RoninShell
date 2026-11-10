@@ -117,6 +117,8 @@ var _level_label := Label.new()
 var _xp_bar := ProgressBar.new()
 var _objectives_frame: Control = null
 var _dossier_frame: Control = null
+var _side_column: Control = null
+var _terminal_focused := false
 var _map_frame: Control = null
 var _dossier_grid := GridContainer.new()
 
@@ -238,6 +240,9 @@ func _input(event: InputEvent) -> void:
 			if start_menu.is_open() and start_menu.continue_button.disabled == false:
 				start_menu.close_menu()   # Esc en el menú equivale a continuar
 				_on_modal_changed()
+			get_viewport().set_input_as_handled()
+		elif _terminal_focused:
+			_toggle_terminal_focus()
 			get_viewport().set_input_as_handled()
 
 
@@ -1110,16 +1115,16 @@ func _build_layout() -> void:
 
 	body.add_child(_build_terminal_panel())
 
-	var side := VBoxContainer.new()
-	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	side.size_flags_stretch_ratio = 1.25
-	side.add_theme_constant_override("separation", 8)
-	body.add_child(side)
+	_side_column = VBoxContainer.new()
+	_side_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_side_column.size_flags_stretch_ratio = 1.25
+	_side_column.add_theme_constant_override("separation", 8)
+	body.add_child(_side_column)
 	_objectives_frame = _build_objectives_panel()
-	side.add_child(_objectives_frame)
-	side.add_child(_build_map_panel())
+	_side_column.add_child(_objectives_frame)
+	_side_column.add_child(_build_map_panel())
 	_dossier_frame = _build_dossier_panel()
-	side.add_child(_dossier_frame)
+	_side_column.add_child(_dossier_frame)
 
 
 func _build_top_bar() -> Control:
@@ -1215,9 +1220,19 @@ func _build_terminal_panel() -> Control:
 	frame.title = "Terminal"
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.size_flags_stretch_ratio = 3.0
+	frame.expandable = true   # "ampliar" la terminal oculta la columna lateral, en vez de una ventana superpuesta: sigue siendo la misma terminal, no una copia de solo lectura
+	frame.expand_requested.connect(_toggle_terminal_focus)
 	terminal.name = "TerminalView"
 	frame.content.add_child(terminal)
 	return frame
+
+
+## Oculta (o devuelve) la columna de objetivos/mapa/expediente para que la terminal ocupe todo el ancho.
+## A diferencia de los otros paneles, aquí no hay ventana ni velo: sigues escribiendo en la misma terminal.
+func _toggle_terminal_focus() -> void:
+	_terminal_focused = not _terminal_focused
+	_side_column.visible = not _terminal_focused
+	terminal.focus_input.call_deferred()
 
 
 func _build_objectives_panel() -> Control:
