@@ -15,6 +15,10 @@ var book_titles: Dictionary = {}
 var active_book: String = ""
 var scheduler: RefCounted = null          # ReviewScheduler
 var review_book: Dictionary = {}          # libro de retos de repaso (puede estar vacío)
+## Examen final (`repaso examen`): varios repasos de bloques distintos, uno tras otro.
+var exam_active := false
+var exam_queue: Array[String] = []
+var exam_results: Array = []   # [{"concept", "passed"}], en orden
 var now_fn: Callable = func() -> float: return Time.get_unix_time_from_system()
 var _requests: Array = []
 
@@ -34,6 +38,25 @@ func take_requests() -> Array:
 	var pending := _requests
 	_requests = []
 	return pending
+
+
+func start_exam(concepts: Array[String]) -> void:
+	exam_active = true
+	exam_queue = concepts.duplicate()
+	exam_results = []
+
+
+## Saca el siguiente concepto de la cola del examen ("" si ya no queda ninguno).
+func exam_pop_next() -> String:
+	if exam_queue.is_empty():
+		return ""
+	return exam_queue.pop_front()
+
+
+func end_exam() -> void:
+	exam_active = false
+	exam_queue = []
+	exam_results = []
 
 
 ## Conceptos para los que hay un reto de repaso.

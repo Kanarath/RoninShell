@@ -895,16 +895,45 @@ func _check_review_finished() -> void:
 	for objective: Dictionary in _review_engine.book["missions"][0]["objectives"]:
 		used_solution = used_solution or _review_engine.mastery_of(objective["id"]) == "solucion"
 	scheduler.record_result(concept, not used_solution, controller.now())
+	var passed := not used_solution
+	if passed:
+		main_engine.award_xp(REVIEW_XP)
+		_stats["review_passes"] += 1
+		mascot.react("happy", 4.0)
+	if controller.exam_active:
+		controller.exam_results.append({"concept": concept, "passed": passed})
+		_advance_exam(passed)
+		return
 	if used_solution:
 		_exit_review("Repaso completado viendo la solución: no pasa nada, vuelve pronto para practicarlo de nuevo.")
 	else:
-		main_engine.award_xp(REVIEW_XP)
-		_stats["review_passes"] += 1
 		_exit_review("Repaso superado: +%d XP. Este concepto tardará más en volver a tocar." % REVIEW_XP)
-		mascot.react("happy", 4.0)
+
+
+## Durante `repaso examen`: pasa al siguiente bloque, o cierra con el resumen si ya no queda ninguno.
+func _advance_exam(passed: bool) -> void:
+	var next := controller.exam_pop_next()
+	if next == "":
+		var results: Array = controller.exam_results
+		var ok := 0
+		for row: Dictionary in results:
+			ok += 1 if row["passed"] else 0
+		var lines: Array[String] = ["=== EXAMEN FINAL: %d de %d superados ===" % [ok, results.size()]]
+		for row: Dictionary in results:
+			lines.append("  %s  %s" % ["[x]" if row["passed"] else "[ ]", str(row["concept"]).replace("_", " ")])
+		controller.end_exam()
+		_exit_review("\n".join(lines))
+		if ok == results.size() and results.size() > 0:
+			fx_layer.banner("EXAMEN SUPERADO")
+			mascot.react("happy", 5.0)
+		return
+	terminal.print_text("%s. Siguiente bloque: %s...\n" % ["Superado" if passed else "Visto con la solución", next.replace("_", " ")], Palette.TEAL)
+	controller.current_review_concept = next
+	_start_review(next)
 
 
 func _exit_review(message: String) -> void:
+	controller.end_exam()   # por si se sale a medias de un examen (inofensivo si no había ninguno)
 	controller.mode = "mision"
 	controller.current_review_concept = ""
 	_review_engine = null

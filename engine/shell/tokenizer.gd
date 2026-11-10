@@ -108,7 +108,7 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 							in_word = false
 					else:
 						word += ch
-						glob = glob or ch == "*" or ch == "?"
+						glob = glob or ch == "*" or ch == "?" or ch == "["
 						in_word = true
 
 		elif c == "~" and not in_word and env != null and (i + 1 >= n or line[i + 1] in [" ", "\t", "/", "|", ">"]):
@@ -134,7 +134,7 @@ static func tokenize(line: String, env: Object = null) -> Dictionary:
 
 		else:
 			word += c
-			glob = glob or c == "*" or c == "?"
+			glob = glob or c == "*" or c == "?" or c == "["
 			in_word = true
 			i += 1
 

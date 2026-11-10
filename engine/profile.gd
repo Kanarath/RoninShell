@@ -28,6 +28,9 @@ const ACHIEVEMENTS := [
 
 const XP_PER_LEVEL := 300
 
+## Examen final (`repaso examen`): un reto de cada bloque grande del temario, uno tras otro.
+const EXAM_CONCEPTS := ["permisos", "descubrimiento_hosts", "cookies_sesiones", "analisis_logs", "bucles", "configuracion_segura"]
+
 
 ## Estado de cada concepto: "solo", "ayuda", "solucion" o "" (sin hacer). Manda el peor resultado,
 ## como en el repaso: un concepto no está dominado hasta que lo está en todos sus objetivos.

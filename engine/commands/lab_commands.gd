@@ -3,6 +3,7 @@ extends RefCounted
 
 const CommandResult := preload("res://engine/shell/command_result.gd")
 const Vfs := preload("res://engine/vfs.gd")
+const Profile := preload("res://engine/profile.gd")
 
 var controller: RefCounted
 
@@ -115,13 +116,35 @@ func _repaso(_session: RefCounted, args: Array, _stdin: String) -> RefCounted:
 	match str(args[0]).to_lower():
 		"iniciar":
 			return _start(args.slice(1))
+		"examen":
+			return _start_exam()
 		"salir":
 			if controller.mode != "repaso":
 				return CommandResult.error("repaso: no estás en ningún repaso.")
 			controller.request("review_exit")
 			return CommandResult.ok("Saliendo del repaso...\n")
 		_:
-			return CommandResult.error("repaso: uso: repaso | repaso iniciar [concepto] | repaso salir")
+			return CommandResult.error("repaso: uso: repaso | repaso iniciar [concepto] | repaso examen | repaso salir")
+
+
+## Un reto de cada bloque grande del temario, uno tras otro (solo los que ya tienen reto creado).
+func _start_exam() -> RefCounted:
+	if controller.mode == "repaso":
+		return CommandResult.error("repaso: ya estás en un repaso. Termínalo o usa `repaso salir`.")
+	if controller.mode == "libre":
+		return CommandResult.error("repaso: estás en modo libre. Escribe `modo mision` y luego `repaso examen`.")
+	var concepts: Array[String] = []
+	for concept: String in Profile.EXAM_CONCEPTS:
+		if not controller.review_mission_for(concept).is_empty():
+			concepts.append(concept)
+	if concepts.size() < 2:
+		return CommandResult.error("repaso: todavía no tienes suficientes retos de repaso distintos para un examen.")
+	controller.start_exam(concepts)
+	var first: String = controller.exam_pop_next()
+	controller.mode = "repaso"
+	controller.current_review_concept = first
+	controller.request("review", {"concept": first})
+	return CommandResult.ok("EXAMEN FINAL: %d retos de bloques distintos, uno tras otro. `repaso salir` lo deja a medias en cualquier momento.\nEmpezando por: %s...\n" % [concepts.size(), first.replace("_", " ")])
 
 
 func _overview() -> String:

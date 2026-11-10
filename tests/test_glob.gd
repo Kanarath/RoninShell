@@ -1,5 +1,5 @@
 extends "res://tests/framework/test_case.gd"
-## Comodines * y ?: coincidencia, expansión sobre el laboratorio, ocultos, permisos y bucles.
+## Comodines *, ? y [...]: coincidencia, expansión sobre el laboratorio, ocultos, permisos y bucles.
 
 const LabLoader := preload("res://engine/lab_loader.gd")
 const ShellSession := preload("res://engine/shell/shell_session.gd")
@@ -29,6 +29,23 @@ func test_coincidencia_de_patrones() -> void:
 	assert_false(Glob.matches("", "x"))
 
 
+func test_clases_entre_corchetes() -> void:
+	assert_true(Glob.matches("log[0-9].txt", "log3.txt"))
+	assert_false(Glob.matches("log[0-9].txt", "logA.txt"))
+	assert_true(Glob.matches("[a-z]rchivo", "archivo"))
+	assert_false(Glob.matches("[a-z]rchivo", "Archivo"))
+	assert_true(Glob.matches("[abc]x", "bx"))
+	assert_false(Glob.matches("[abc]x", "dx"))
+	assert_true(Glob.matches("[!0-9]x", "ax"), "negada con !")
+	assert_false(Glob.matches("[!0-9]x", "5x"))
+	assert_true(Glob.matches("[^0-9]x", "ax"), "negada con ^, como !")
+	assert_true(Glob.matches("log[0-9][0-9].txt", "log42.txt"), "varias clases seguidas")
+	assert_false(Glob.matches("log[0-9][0-9].txt", "log4.txt"))
+	assert_true(Glob.has_wildcard("log[0-9].txt"))
+	assert_true(Glob.matches("[", "["), "un corchete sin cerrar es literal, como en bash")
+	assert_true(Glob.has_wildcard("["), "aunque no cierre, sigue intentando expandirse (y si no hay match, se deja igual)")
+
+
 func test_ls_y_echo_con_comodines() -> void:
 	var s := _session()
 	assert_eq(_out(s, "ls /var/log/*.log"), "/var/log/access.log\n/var/log/auth.log\n")
@@ -36,6 +53,11 @@ func test_ls_y_echo_con_comodines() -> void:
 	assert_eq(_out(s, "echo /var/log/a?th.log"), "/var/log/auth.log\n")
 	s.run("cd /var/log")
 	assert_eq(_out(s, "echo *.log"), "access.log auth.log\n")
+
+
+func test_ls_con_clase_entre_corchetes() -> void:
+	var s := _session()
+	assert_eq(_out(s, "echo /var/log/a[cu]*.log"), "/var/log/access.log /var/log/auth.log\n")
 
 
 func test_sin_coincidencias_se_deja_el_patron_como_bash() -> void:
