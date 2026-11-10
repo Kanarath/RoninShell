@@ -14,7 +14,7 @@ func _session() -> RefCounted:
 
 
 func test_los_conceptos_disponibles() -> void:
-	assert_eq(ConceptDocs.topics(), ["cabeceras", "control_acceso", "cookies", "dns", "path_traversal", "tls", "xss"])
+	assert_eq(ConceptDocs.topics(), ["cabeceras", "control_acceso", "cookies", "dns", "escalada_privilegios", "explotacion", "path_traversal", "post_explotacion", "tls", "xss"])
 
 
 func test_cada_ficha_tiene_lo_necesario_y_es_defensiva() -> void:

@@ -406,6 +406,8 @@ func _check_achievements() -> void:
 			terminal.print_text("[*] Logro desbloqueado: %s  -  %s" % [item["title"], item["description"]], Palette.GOLD)
 			mascot.react("happy", 4.0)
 			_play_sound("logro")
+			if item["id"] == "auditoria_completa":
+				terminal.print_text("Has completado todos los laboratorios. Escribe  formacion  para ver qué queda fuera de este juego a propósito y por dónde seguir aprendiendo de verdad.", Palette.TEAL)
 	if profile_panel.is_open():
 		_refresh_profile()
 

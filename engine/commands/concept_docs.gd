@@ -156,6 +156,60 @@ const CONCEPTS := {
 		],
 		"see_also": ["cookies", "cabeceras"],
 	},
+	"explotacion": {
+		"summary": "Usar un fallo de seguridad para conseguir algo que no deberías: entrar sin credenciales, ejecutar código ajeno, leer datos que no son tuyos. RoninShell NO lo simula: es la frontera de este simulador.",
+		"notes": [
+			"En un pentest real, la explotación viene DESPUÉS del análisis de vulnerabilidades (ver `avisos`): primero se identifica y se razona el riesgo, y solo con autorización expresa se intenta comprobar que es real.",
+			"Requiere piezas específicas para cada fallo concreto (un 'exploit'), que no son intercambiables entre versiones ni sistemas: lo que funciona en una versión puede no funcionar en otra, incluso parecida.",
+			"Fuera de un laboratorio autorizado, intentarlo sobre un sistema que no es tuyo es ilegal, aunque solo sea \"para probar\".",
+		],
+		"dont_conclude": [
+			"Que un aviso de seguridad exista (ver `avisos`) no significa que explotarlo sea fácil, ni rápido, ni seguro de hacer sin dejar rastro.",
+			"Que algo \"parezca\" vulnerable por su versión no prueba que lo sea: hay que confirmarlo, y confirmarlo sin autorización es ilegal.",
+		],
+		"defense": [
+			"Mantener el software actualizado reduce la ventana de tiempo en la que un fallo conocido sigue siendo explotable.",
+			"Segmentar la red y aplicar el mínimo privilegio limita lo que se puede alcanzar aunque un fallo se explote.",
+			"Registrar y vigilar la actividad (ver `analisis_logs` en el juego) ayuda a detectar un intento, incluso si tiene éxito.",
+		],
+		"see_also": ["avisos", "escalada_privilegios", "formacion"],
+	},
+	"escalada_privilegios": {
+		"summary": "Pasar de un acceso limitado (un usuario normal) a uno mayor (root/administrador) dentro del MISMO sistema. RoninShell NO lo simula: es la frontera de este simulador.",
+		"notes": [
+			"Suele apoyarse en errores de configuración (permisos mal puestos, programas con más privilegio del necesario) o en fallos del propio sistema operativo.",
+			"Es la segunda fase típica tras conseguir un primer acceso limitado: sin ella, ese primer acceso suele valer poco.",
+			"El 'principio de mínimo privilegio' (dar a cada cuenta solo lo que necesita) es la defensa que más la dificulta, y es justo lo que practicas en los laboratorios de permisos de este juego.",
+		],
+		"dont_conclude": [
+			"Que una cuenta tenga acceso limitado no significa que el sistema esté a salvo: depende de cómo esté configurado todo lo demás.",
+			"Que encuentres un permiso mal puesto en un sistema tuyo no te autoriza a probar si se puede aprovechar en uno que no lo es.",
+		],
+		"defense": [
+			"Mínimo privilegio: cada cuenta y cada proceso, solo con los permisos que de verdad necesita.",
+			"Revisar y corregir programas que corren con más privilegio del necesario (lo que practicas en el laboratorio de Endurecimiento).",
+			"Mantener el sistema operativo actualizado y auditar periódicamente los permisos (lo que practicas en Higiene de cuentas).",
+		],
+		"see_also": ["explotacion", "post_explotacion", "formacion"],
+	},
+	"post_explotacion": {
+		"summary": "Lo que se hace DESPUÉS de entrar y escalar privilegios: moverse a otros equipos, mantener el acceso, buscar lo que de verdad importa. RoninShell NO lo simula: es la frontera de este simulador.",
+		"notes": [
+			"Incluye el movimiento lateral (saltar de un equipo a otro de la misma red) y la persistencia (dejar una forma de volver a entrar más adelante).",
+			"Es la fase que más daño real causa en un incidente: por eso la detección y la respuesta importan tanto como evitar la entrada inicial.",
+			"En un pentest autorizado, esta fase se acuerda explícitamente con el cliente de antemano: no se da por hecha solo por haber entrado en algo.",
+		],
+		"dont_conclude": [
+			"Que un atacante entrara en un equipo no significa que ya tenga toda la red: la segmentación y el mínimo privilegio pueden detenerlo ahí.",
+			"Que no se detecte nada raro no prueba que no haya pasado nada: por eso se revisan los registros (ver `analisis_logs`), no solo se confía en la ausencia de avisos.",
+		],
+		"defense": [
+			"Segmentar la red para que un equipo comprometido no dé acceso directo a los demás.",
+			"Vigilar y conservar los registros (lo que practicas en Triaje de un incidente): la detección a tiempo corta esta fase.",
+			"Tener un plan de respuesta a incidentes preparado de antemano, no improvisado en el momento.",
+		],
+		"see_also": ["escalada_privilegios", "grep", "formacion"],
+	},
 }
 
 
