@@ -77,3 +77,11 @@ El arte sale de `art/deck.px.js` (`build_art.cmd` lo copia a `assets/ui`). `art/
 ## Requisitos (previstos)
 
 - Godot 4.7 (sin Docker, sin base de datos, sin internet).
+
+## Licencia
+
+[GPL-3.0](LICENSE).
+
+## Cómo se ha hecho
+
+Diseñado y dirigido por Gerard Montero Sellarés ([Kanarath](https://github.com/Kanarath)), con el desarrollo asistido por IA (Claude Code).
